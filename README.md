@@ -58,14 +58,92 @@ agentic-investment-assistant/
     └── test_gpt4o_connection.py   # Day 1 connectivity check
 ```
 
+## Day 2: Synthetic Dataset
+
+Run the generator once to create your data files:
+```bash
+python data/generate_data.py
+```
+
+This creates:
+- `data/clients.csv` — 10 fictional clients: `client_id`, `name`, `risk_profile` (Conservative/Moderate/Aggressive)
+- `data/holdings.csv` — each client's stock holdings: `client_id`, `symbol`, `sector`, `quantity`, `purchase_price`
+
+Uses real public stock tickers (AAPL, MSFT, JPM, etc.) so the market
+context tool can pull live prices via yfinance later — but all client
+names and account data are 100% fictional, generated locally.
+
+Re-run the script anytime to regenerate (fixed random seed = same data every time).
+
+## Day 3: Tool Implementation
+
+All 4 tools are now fully implemented against the synthetic dataset:
+
+- `get_portfolio_summary(client_id)` — total value, holdings, sector allocation
+- `calc_risk_score(client_id)` — 0-100 score based on sector concentration, single-position concentration, and stated risk profile
+- `suggest_rebalancing(client_id)` — rule-based rebalancing suggestions vs. equal-weight target
+- `get_market_context(symbol)` — live public price data via yfinance (requires internet)
+
+Test everything at once:
+```bash
+python tests/test_all_tools.py
+```
+
+Or test one tool individually:
+```bash
+python -m src.tools.portfolio_summary
+python -m src.tools.risk_score
+python -m src.tools.rebalancing
+python -m src.tools.market_context
+```
+
+Valid client IDs are `CLIENT_001` through `CLIENT_010` (see `data/clients.csv`).
+
+## Day 4: The Agent (LangChain + GPT-4o Function-Calling)
+
+`src/agent.py` is the core of the project. It wraps all 4 tools with
+LangChain's `@tool` decorator and lets GPT-4o decide which tool(s) to
+call based on the user's natural-language query — this is the actual
+"agentic" behavior the hackathon is judging.
+
+How it works:
+1. User asks a question in plain English
+2. GPT-4o reads the question + each tool's docstring, decides which
+   tool(s) apply
+3. The agent executes those tools against your real synthetic data
+4. GPT-4o synthesizes the tool output into a clear, advisor-friendly answer
+
+Test it:
+```bash
+python tests/test_agent.py
+```
+
+This runs 5 sample queries, including one that should trigger **two
+tools in a single query** (risk score + rebalancing) — that's the
+clearest way to demonstrate multi-step agentic reasoning to judges.
+
+Quick single-query test:
+```bash
+python -m src.agent
+```
+
+**What to check when you run it:**
+- Does each query call the tool you'd expect? (printed as `🔧 Agent is calling: ...`)
+- Does the multi-tool query (test 5) call both `risk_score_tool` AND `rebalancing_tool`?
+- Is the final answer readable prose, not raw JSON dumped at you?
+
+If a query calls the wrong tool, the fix is almost always to make that
+tool's docstring in `src/agent.py` more specific — GPT-4o routes based
+on those descriptions.
+
 ## Roadmap
 
 | Day | Milestone |
 |---|---|
-| 1 | API key working, tool signatures defined, repo initialized ✅ (this step) |
-| 2 | Synthetic portfolio dataset |
-| 3 | Implement the 4 tool functions |
-| 4 | LangChain agent + GPT-4o function-calling wired up |
+| 1 | API key working, tool signatures defined, repo initialized ✅ |
+| 2 | Synthetic portfolio dataset ✅ |
+| 3 | Implement the 4 tool functions ✅ |
+| 4 | LangChain agent + GPT-4o function-calling wired up ✅ |
 | 5 | Agent tested end-to-end on sample queries |
 | 6 | ChromaDB memory added |
 | 7 | Streamlit chat UI |
