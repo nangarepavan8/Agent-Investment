@@ -1,32 +1,57 @@
 """
-Tool 1: Portfolio Summary
-
-Called when the user asks about a client's holdings, allocation,
-or general "what does this portfolio look like" questions.
-
-IMPLEMENTATION NOTE (Day 3):
-Will read from the synthetic dataset (data/portfolios.csv or .db)
-and return a structured summary — no LLM call inside this function,
-pure Python/pandas logic.
+Tool 1: Portfolio Summary — Day 3 implementation
 """
 
 from typing import Dict, Any
+from src.tools.data_loader import get_client_holdings, get_client_info
 
 
 def get_portfolio_summary(client_id: str) -> Dict[str, Any]:
     """
-    Return a summary of a client's portfolio: total value, holdings,
-    sector allocation, and asset mix.
+    Return a summary of a client's portfolio: total value (at purchase
+    price basis), holdings list, and sector allocation percentages.
 
     Args:
-        client_id: Unique identifier for the synthetic client
-                    (e.g. "CLIENT_001").
+        client_id: e.g. "CLIENT_001"
 
     Returns:
-        A dictionary containing:
-            - total_value (float)
-            - holdings (list of dicts: symbol, quantity, value)
-            - sector_allocation (dict: sector -> percentage)
+        dict with total_value, holdings, sector_allocation
     """
-    # TODO (Day 3): load from data/portfolios.csv, compute real values
-    raise NotImplementedError("Implement on Day 3 using synthetic dataset")
+    client_info = get_client_info(client_id)
+    holdings_df = get_client_holdings(client_id)
+
+    holdings_df = holdings_df.copy()
+    holdings_df["value"] = holdings_df["quantity"] * holdings_df["purchase_price"]
+
+    total_value = round(holdings_df["value"].sum(), 2)
+
+    holdings_list = [
+        {
+            "symbol": row["symbol"],
+            "sector": row["sector"],
+            "quantity": int(row["quantity"]),
+            "value": round(row["value"], 2),
+        }
+        for _, row in holdings_df.iterrows()
+    ]
+
+    sector_totals = holdings_df.groupby("sector")["value"].sum()
+    sector_allocation = {
+        sector: round((value / total_value) * 100, 1)
+        for sector, value in sector_totals.items()
+    }
+
+    return {
+        "client_id": client_id,
+        "client_name": client_info["name"],
+        "risk_profile": client_info["risk_profile"],
+        "total_value": total_value,
+        "holdings": holdings_list,
+        "sector_allocation": sector_allocation,
+    }
+
+
+if __name__ == "__main__":
+    # Quick manual test - run: python -m src.tools.portfolio_summary
+    import json
+    print(json.dumps(get_portfolio_summary("CLIENT_001"), indent=2))
