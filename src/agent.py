@@ -36,7 +36,10 @@ def portfolio_summary_tool(client_id: str) -> str:
     sector allocation. Use this when the user asks what a portfolio
     contains, its total value, or how it's allocated across sectors.
     client_id must be in the format CLIENT_001 through CLIENT_010."""
-    return json.dumps(get_portfolio_summary(client_id))
+    try:
+        return json.dumps(get_portfolio_summary(client_id))
+    except Exception as e:
+        return json.dumps({"error": str(e)})
 
 
 @tool
@@ -46,7 +49,10 @@ def risk_score_tool(client_id: str) -> str:
     that score. Use this when the user asks how risky a portfolio is
     or wants a risk assessment. client_id must be in the format
     CLIENT_001 through CLIENT_010."""
-    return json.dumps(calc_risk_score(client_id))
+    try:
+        return json.dumps(calc_risk_score(client_id))
+    except Exception as e:
+        return json.dumps({"error": str(e)})
 
 
 @tool
@@ -56,7 +62,10 @@ def rebalancing_tool(client_id: str) -> str:
     Use this when the user asks how to rebalance, diversify, or adjust
     a portfolio. client_id must be in the format CLIENT_001 through
     CLIENT_010."""
-    return json.dumps(suggest_rebalancing(client_id))
+    try:
+        return json.dumps(suggest_rebalancing(client_id))
+    except Exception as e:
+        return json.dumps({"error": str(e)})
 
 
 @tool
@@ -65,7 +74,10 @@ def market_context_tool(symbol: str) -> str:
     today's % change, and 52-week range. Use this when the user asks
     about current market conditions, price, or performance of a
     specific stock ticker (e.g. AAPL, MSFT)."""
-    return json.dumps(get_market_context(symbol))
+    try:
+        return json.dumps(get_market_context(symbol))
+    except Exception as e:
+        return json.dumps({"error": str(e)})
 
 
 ALL_TOOLS = [portfolio_summary_tool, risk_score_tool, rebalancing_tool, market_context_tool]
@@ -81,7 +93,12 @@ Always use the appropriate tool(s) to answer questions about specific
 clients or stocks rather than guessing. You can call multiple tools in
 sequence if a question requires it (e.g. risk score AND rebalancing
 suggestions). After getting tool results, synthesize a clear, concise,
-advisor-friendly answer — don't just dump raw JSON at the user."""
+advisor-friendly answer — don't just dump raw JSON at the user.
+
+If a tool result contains an "error" field, don't show raw JSON or a
+stack trace to the user — explain the issue in plain language (e.g. an
+invalid client ID) and suggest a valid alternative (valid client IDs
+are CLIENT_001 through CLIENT_010)."""
 
 
 def run_agent(user_query: str, client_id: str = None, verbose: bool = True) -> str:

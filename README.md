@@ -224,6 +224,42 @@ streamlit run app.py
 Switch between the two tabs, and switch clients in the sidebar to see
 the dashboard update instantly.
 
+## Day 9: Full Run-Through & Bug Fixing
+
+**A real bug was found and fixed today:** previously, if GPT-4o called a
+tool with an invalid `client_id` (e.g. a judge asks about a client that
+doesn't exist, or mistypes one), the tool raised an uncaught error and
+crashed the entire response. All 4 tools now catch errors internally
+and return a graceful `{"error": "..."}` message that GPT-4o reads and
+explains in plain language instead of crashing.
+
+Run the full test suite (covers happy paths, multi-tool queries,
+memory follow-ups, AND edge cases that should not crash):
+```bash
+python tests/test_day9_full_runthrough.py
+```
+
+**What to check in the output:**
+- [ ] Every "happy path" query calls the tool you'd expect
+- [ ] Multi-tool queries call BOTH tools, not just one
+- [ ] The memory follow-up ("rebalance **it**") correctly resolves context
+- [ ] Edge cases (invalid client, invalid symbol, off-topic, empty query) return a **graceful message**, not a crash
+- [ ] All answers are clear prose — no raw JSON leaking through
+
+**Also test the Streamlit app itself end-to-end:**
+```bash
+streamlit run app.py
+```
+- [ ] Switch between all 10 clients in the sidebar — dashboard updates correctly each time
+- [ ] Ask a question about a client, then switch clients and ask again — no cross-contamination
+- [ ] Try an intentionally bad question (e.g. "tell me about CLIENT_999") — confirm it doesn't crash the UI
+- [ ] Note response times — if GPT-4o calls feel slow, that's normal for a first request; subsequent ones should be faster
+
+**If you find a query that still breaks something**, the fix is one of:
+1. Tighten that tool's docstring in `src/agent.py` if it's a routing problem
+2. Add a similar try/except if it's a new crash source
+3. Adjust the `SYSTEM_PROMPT` if the final answer's tone/format is off
+
 ## Roadmap
 
 | Day | Milestone |
@@ -236,5 +272,5 @@ the dashboard update instantly.
 | 6 | ChromaDB memory added ✅ |
 | 7 | Streamlit chat UI ✅ |
 | 8 | Dashboard view ✅ |
-| 9 | Full run-through + bug fixes |
+| 9 | Full run-through + bug fixes ✅ |
 | 10 | Polish + demo rehearsal |
