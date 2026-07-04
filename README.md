@@ -196,6 +196,34 @@ It should open automatically in your browser at `http://localhost:8501`.
 If anything errors in the chat, the app will show it inline (⚠️) rather
 than crashing — check your `.env` API key and internet connection first.
 
+## Day 8: Dashboard View
+
+`app.py` now has two tabs:
+- **💬 Chat** — the conversational agent (from Day 7)
+- **📊 Dashboard** — visual view of the selected client's portfolio
+
+The dashboard shows:
+- Total portfolio value, risk score (with color-coded 🟢🟡🔴), and holdings count as headline metrics
+- A sector allocation bar chart
+- The specific risk factors driving the score (same explanations the chat agent uses)
+- A full holdings table
+
+**Important design choice:** the dashboard calls `get_portfolio_summary()`
+and `calc_risk_score()` **directly** — it does NOT go through GPT-4o.
+This means the dashboard is instant and free (no API cost, no latency)
+every time you switch clients, while the chat tab is where the actual
+LLM reasoning happens. This is worth mentioning to judges: it shows you
+understood which parts of the system need "agentic" reasoning
+(natural language routing) versus which parts are just deterministic
+data display (no LLM needed, faster and cheaper).
+
+Run it:
+```bash
+streamlit run app.py
+```
+Switch between the two tabs, and switch clients in the sidebar to see
+the dashboard update instantly.
+
 ## Roadmap
 
 | Day | Milestone |
@@ -207,6 +235,6 @@ than crashing — check your `.env` API key and internet connection first.
 | 5 | Agent tested end-to-end on sample queries ✅ |
 | 6 | ChromaDB memory added ✅ |
 | 7 | Streamlit chat UI ✅ |
-| 8 | Dashboard view |
+| 8 | Dashboard view ✅ |
 | 9 | Full run-through + bug fixes |
 | 10 | Polish + demo rehearsal |
