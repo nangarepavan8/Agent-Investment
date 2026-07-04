@@ -21,6 +21,7 @@ from src.tools.portfolio_summary import get_portfolio_summary
 from src.tools.risk_score import calc_risk_score
 from src.tools.rebalancing import suggest_rebalancing
 from src.tools.market_context import get_market_context
+from src.memory import store_memory, retrieve_relevant_memory
 
 
 # ---------------------------------------------------------------------------
@@ -83,16 +84,40 @@ suggestions). After getting tool results, synthesize a clear, concise,
 advisor-friendly answer — don't just dump raw JSON at the user."""
 
 
-def run_agent(user_query: str, verbose: bool = True) -> str:
+def run_agent(user_query: str, client_id: str = None, verbose: bool = True) -> str:
     """
-    Run one query through the agent: GPT-4o decides which tool(s) to call,
-    the tools execute, and GPT-4o synthesizes a final natural-language answer.
+    Run one query through the agent: retrieve relevant past memory (if a
+    client_id is given), let GPT-4o decide which tool(s) to call, execute
+    them, synthesize a final answer, and store this exchange in memory
+    for future turns.
+
+    Args:
+        user_query: the advisor's natural-language question
+        client_id: e.g. "CLIENT_001" - enables per-client memory. If None,
+                   the query runs without memory context (useful for
+                   generic questions not tied to one client).
+        verbose: print which tools get called, for debugging/demo narration
     """
     llm = ChatOpenAI(model=OPENAI_MODEL, api_key=OPENAI_API_KEY, temperature=0)
     llm_with_tools = llm.bind_tools(ALL_TOOLS)
 
+    system_content = SYSTEM_PROMPT
+
+    # Pull relevant past conversation for this client, if any exists
+    if client_id:
+        past_memories = retrieve_relevant_memory(client_id, user_query)
+        if past_memories:
+            memory_context = "\n\n".join(past_memories)
+            system_content += (
+                f"\n\nRelevant past conversation with this client:\n{memory_context}\n"
+                f"Use this context if it's relevant to the current question, "
+                f"but prioritize fresh tool data for anything numeric."
+            )
+            if verbose:
+                print(f"  🧠 Retrieved {len(past_memories)} relevant past memory item(s)")
+
     messages = [
-        SystemMessage(content=SYSTEM_PROMPT),
+        SystemMessage(content=system_content),
         HumanMessage(content=user_query),
     ]
 
@@ -101,32 +126,46 @@ def run_agent(user_query: str, verbose: bool = True) -> str:
     messages.append(ai_msg)
 
     if not ai_msg.tool_calls:
-        # Model answered directly without needing a tool
-        return ai_msg.content
+        final_answer = ai_msg.content
+    else:
+        # Execute every tool call the model requested
+        for tool_call in ai_msg.tool_calls:
+            tool_name = tool_call["name"]
+            tool_args = tool_call["args"]
 
-    # Execute every tool call the model requested
-    for tool_call in ai_msg.tool_calls:
-        tool_name = tool_call["name"]
-        tool_args = tool_call["args"]
+            if verbose:
+                print(f"  🔧 Agent is calling: {tool_name}({tool_args})")
 
-        if verbose:
-            print(f"  🔧 Agent is calling: {tool_name}({tool_args})")
+            selected_tool = TOOLS_BY_NAME[tool_name]
+            tool_result = selected_tool.invoke(tool_args)
 
-        selected_tool = TOOLS_BY_NAME[tool_name]
-        tool_result = selected_tool.invoke(tool_args)
+            messages.append(
+                ToolMessage(content=str(tool_result), tool_call_id=tool_call["id"])
+            )
 
-        messages.append(
-            ToolMessage(content=str(tool_result), tool_call_id=tool_call["id"])
-        )
+        # Second call: model synthesizes a final answer using the tool results
+        final_response = llm_with_tools.invoke(messages)
+        final_answer = final_response.content
 
-    # Second call: model synthesizes a final answer using the tool results
-    final_response = llm_with_tools.invoke(messages)
-    return final_response.content
+    # Store this exchange in memory for future turns with this client
+    if client_id:
+        store_memory(client_id, user_query, final_answer)
+
+    return final_answer
 
 
 if __name__ == "__main__":
     # Quick manual test - run: python -m src.agent
-    test_query = "How risky is CLIENT_001's portfolio and how should we rebalance it?"
-    print(f"Query: {test_query}\n")
-    answer = run_agent(test_query)
-    print(f"\nFinal Answer:\n{answer}")
+    # This demonstrates memory: the second query references "it" from the
+    # first, and should retrieve context to understand what "it" refers to.
+    client = "CLIENT_001"
+
+    print("--- First query ---")
+    q1 = "How risky is CLIENT_001's portfolio?"
+    print(f"Query: {q1}\n")
+    print(f"Answer: {run_agent(q1, client_id=client)}\n")
+
+    print("--- Follow-up query (tests memory) ---")
+    q2 = "Based on that, how should we rebalance it?"
+    print(f"Query: {q2}\n")
+    print(f"Answer: {run_agent(q2, client_id=client)}\n")

@@ -136,6 +136,40 @@ If a query calls the wrong tool, the fix is almost always to make that
 tool's docstring in `src/agent.py` more specific — GPT-4o routes based
 on those descriptions.
 
+## Day 6: Vector Memory (ChromaDB)
+
+`src/memory.py` adds persistent, per-client memory so the agent
+remembers past exchanges instead of treating every question as brand
+new. This is what makes follow-up questions work — e.g. "how should
+we rebalance **it**?" after a risk question, without re-specifying
+the client.
+
+How it's wired into the agent (`src/agent.py`):
+1. Before answering, the agent retrieves relevant past exchanges for
+   that specific `client_id`
+2. That context gets added to the system prompt so GPT-4o can use it
+3. After answering, the new exchange gets stored for future turns
+
+**⚠️ Test this today, not on demo day:** ChromaDB downloads a small
+embedding model (~80MB) from `huggingface.co` the first time it runs.
+If your company network blocks that domain, the download will fail.
+Run the test below now — if it fails, try once from home wifi or a
+personal hotspot to let it download and cache (only needs to happen
+once; it's cached locally after that).
+
+Test memory in isolation (no OpenAI calls, no cost):
+```bash
+python tests/test_memory.py
+```
+
+Test memory working inside a real conversation (uses your API key):
+```bash
+python -m src.agent
+```
+This runs two queries back-to-back — the second one ("rebalance **it**")
+should correctly understand "it" refers to CLIENT_001's portfolio from
+the first query, using retrieved memory context.
+
 ## Roadmap
 
 | Day | Milestone |
@@ -144,8 +178,8 @@ on those descriptions.
 | 2 | Synthetic portfolio dataset ✅ |
 | 3 | Implement the 4 tool functions ✅ |
 | 4 | LangChain agent + GPT-4o function-calling wired up ✅ |
-| 5 | Agent tested end-to-end on sample queries |
-| 6 | ChromaDB memory added |
+| 5 | Agent tested end-to-end on sample queries ✅ |
+| 6 | ChromaDB memory added ✅ |
 | 7 | Streamlit chat UI |
 | 8 | Dashboard view |
 | 9 | Full run-through + bug fixes |
