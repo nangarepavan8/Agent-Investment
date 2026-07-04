@@ -260,6 +260,20 @@ streamlit run app.py
 2. Add a similar try/except if it's a new crash source
 3. Adjust the `SYSTEM_PROMPT` if the final answer's tone/format is off
 
+## Day 10: Polish + Demo Rehearsal
+
+- `app.py` now has a subtitle, an **"ℹ️ How this works"** expander (great
+  for judges who ask about architecture — just click it, don't recite
+  from memory), and clearer framing throughout
+- **`DEMO_SCRIPT.md`** — a full rehearsal guide: pre-demo checklist,
+  a timed 5-minute demo flow with the exact sequence of questions to
+  ask, anticipated judge Q&A with suggested answers, and a "what to do
+  if something breaks live" section
+
+**Read `DEMO_SCRIPT.md` and rehearse it out loud at least once before
+the actual demo** — saying your answers to the anticipated questions
+out loud is very different from just having read them.
+
 ## Roadmap
 
 | Day | Milestone |
@@ -273,4 +287,6 @@ streamlit run app.py
 | 7 | Streamlit chat UI ✅ |
 | 8 | Dashboard view ✅ |
 | 9 | Full run-through + bug fixes ✅ |
-| 10 | Polish + demo rehearsal |
+| 10 | Polish + demo rehearsal ✅ |
+
+🎉 **Build complete.** See `DEMO_SCRIPT.md` for your presentation guide.

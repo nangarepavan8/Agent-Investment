@@ -53,7 +53,35 @@ if st.sidebar.button("🗑️ Clear conversation"):
 # Main area: title + tabs
 # ---------------------------------------------------------------------------
 st.title("Agentic Investment Research Assistant")
+st.caption(
+    "Ask a natural-language question — the agent decides which tool(s) to call, "
+    "pulls real portfolio data, and remembers context across the conversation."
+)
 st.caption(f"Currently viewing: **{selected_label}**")
+
+with st.expander("ℹ️ How this works (architecture)"):
+    st.markdown("""
+    **Flow:** Your question → GPT-4o reasons about which tool(s) apply →
+    tool(s) execute against synthetic portfolio data → ChromaDB supplies
+    relevant past conversation context → GPT-4o synthesizes a final answer.
+
+    **Tools available to the agent:**
+    - `get_portfolio_summary` — holdings, value, sector allocation
+    - `calc_risk_score` — 0-100 score with explainable contributing factors
+    - `suggest_rebalancing` — rule-based rebalancing suggestions
+    - `get_market_context` — live public stock prices via yfinance
+
+    **Memory:** Every exchange is stored per-client in ChromaDB (local
+    vector store), so follow-up questions like *"how should we rebalance
+    it?"* correctly resolve context from earlier in the conversation.
+
+    **Data:** All client names and holdings are synthetic/fictional,
+    generated locally — no real client or financial account data is used.
+
+    **Future path:** This MVP runs on GPT-4o at hackathon scale. The
+    documented enterprise roadmap upgrades to Azure OpenAI, Microsoft
+    Fabric, and Azure hosting for production, multi-user deployment.
+    """)
 
 tab_chat, tab_dashboard = st.tabs(["💬 Chat", "📊 Dashboard"])
 
