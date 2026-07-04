@@ -170,6 +170,32 @@ This runs two queries back-to-back — the second one ("rebalance **it**")
 should correctly understand "it" refers to CLIENT_001's portfolio from
 the first query, using retrieved memory context.
 
+## Day 7: Streamlit Chat UI
+
+`app.py` is the demo-facing front end. Run it with:
+```bash
+streamlit run app.py
+```
+It should open automatically in your browser at `http://localhost:8501`.
+
+**What it does:**
+- Sidebar lets you pick which synthetic client you're asking about (CLIENT_001-010)
+- Main area is a chat interface — type a question, the agent responds
+- Suggested example questions are listed in the sidebar for quick demo use
+- "Clear conversation" button resets the visible chat (note: ChromaDB
+  memory persists in the background regardless — this button only
+  clears what's shown on screen)
+
+**Try this flow to test memory + multi-tool routing together:**
+1. Pick a client (e.g. CLIENT_001)
+2. Ask: "How risky is this portfolio?"
+3. Ask: "How should we rebalance it?" — should correctly use "it" =
+   the same portfolio, and pull the risk context from memory
+4. Ask: "What's the current price of AAPL?" — tests the market-data tool
+
+If anything errors in the chat, the app will show it inline (⚠️) rather
+than crashing — check your `.env` API key and internet connection first.
+
 ## Roadmap
 
 | Day | Milestone |
@@ -180,7 +206,7 @@ the first query, using retrieved memory context.
 | 4 | LangChain agent + GPT-4o function-calling wired up ✅ |
 | 5 | Agent tested end-to-end on sample queries ✅ |
 | 6 | ChromaDB memory added ✅ |
-| 7 | Streamlit chat UI |
+| 7 | Streamlit chat UI ✅ |
 | 8 | Dashboard view |
 | 9 | Full run-through + bug fixes |
 | 10 | Polish + demo rehearsal |
