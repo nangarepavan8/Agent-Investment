@@ -1,0 +1,11 @@
+client_id,name,risk_profile
+CLIENT_001,Rohan Sharma,Aggressive
+CLIENT_002,Priya Reddy,Conservative
+CLIENT_003,Meera Verma,Aggressive
+CLIENT_004,Neha Verma,Aggressive
+CLIENT_005,Sneha Sharma,Conservative
+CLIENT_006,Rohan Reddy,Conservative
+CLIENT_007,Neha Menon,Conservative
+CLIENT_008,Neha Reddy,Aggressive
+CLIENT_009,Neha Gupta,Conservative
+CLIENT_010,Vikram Menon,Moderate
