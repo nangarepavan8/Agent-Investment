@@ -16,7 +16,14 @@ except RD, which uses the standard recurring-deposit maturity formula.
 from datetime import date
 from typing import Dict, Any
 
-TODAY = date(2026, 7, 5)  # matches the fixed reference date used in data generation
+# FIX: previously hardcoded to a fixed date, meaning FD/RD/Bond/scheme
+# valuations never actually changed no matter how much real time
+# passed. Now uses the REAL current date, so re-running the app (or
+# the daily snapshot script) on a later day correctly shows more
+# elapsed time and a higher current_value — this is what makes these
+# valuations genuinely "update daily" rather than being frozen.
+def _today() -> date:
+    return date.today()
 
 # DEMO SIMPLIFICATION: stocks are priced in USD (real US tickers via
 # yfinance), while cash/FD/RD/bonds/government schemes are denominated
@@ -33,7 +40,7 @@ def inr_to_usd(inr_amount: float) -> float:
 
 def _years_elapsed(start_date_str: str) -> float:
     start = date.fromisoformat(start_date_str)
-    days = (TODAY - start).days
+    days = (_today() - start).days
     return max(days / 365.25, 0)
 
 

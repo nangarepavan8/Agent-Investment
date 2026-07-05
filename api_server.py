@@ -21,6 +21,7 @@ See README "N8N Automation" section for the exact N8N workflow steps.
 
 from fastapi import FastAPI
 from src.monitoring import scan_all_clients
+from scripts.daily_valuation_snapshot import build_snapshot, OUTPUT_PATH
 
 app = FastAPI(title="Agentic Investment Assistant - Automation API")
 
@@ -43,6 +44,25 @@ def run_scan():
     return {
         "alert_count": len(alerts),
         "alerts": alerts,
+    }
+
+
+@app.get("/snapshot")
+def run_snapshot():
+    """
+    Regenerate the daily Excel valuation snapshot (all clients, all
+    asset classes, at today's real market prices/valuations).
+    Designed to be called by N8N on a schedule (e.g. daily at market
+    close) so the spreadsheet is always fresh without manual effort.
+
+    Returns:
+        JSON confirming the snapshot was written, with its file path.
+    """
+    build_snapshot()
+    return {
+        "status": "ok",
+        "message": "Daily valuation snapshot regenerated.",
+        "file_path": OUTPUT_PATH,
     }
 
 

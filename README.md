@@ -599,6 +599,45 @@ streamlit run app.py
 Click a sidebar suggestion button, then check the Chat tab for the
 response. Open the Dashboard tab to see the new donut charts.
 
+## Stretch Features, Round 9: Daily Excel Valuation Snapshot
+
+**A real bug was found and fixed:** FD/RD/Bond/government-scheme
+valuations used a hardcoded fixed date instead of the actual current
+date — meaning they would NEVER have genuinely updated over time, no
+matter how many days passed. Fixed in `src/tools/fixed_income.py` to
+use the real system date, so these valuations now correctly grow as
+real time passes.
+
+**New: `scripts/daily_valuation_snapshot.py`** — generates a
+multi-sheet Excel workbook (`data/daily_valuation_snapshot.xlsx`) with
+every client's current valuation: stocks at live market prices,
+FD/RD/Bonds/schemes valued as of today's real date, cash balances,
+risk scores, and full holdings detail. Useful as a physical file to
+open, email, or archive — separate from running the live app.
+
+Run it manually anytime:
+```bash
+python scripts/daily_valuation_snapshot.py
+```
+
+### Making it run automatically every day
+
+**Option A — Windows Task Scheduler (simplest, no extra tools):**
+1. Open Task Scheduler → Create Basic Task
+2. Name it "Daily Portfolio Snapshot", trigger: Daily, set your preferred time
+3. Action: "Start a program" →
+   - Program: `D:\Hackathon\Project\agentic-investment-assistant\agentic-investment-assistant\venv\Scripts\python.exe`
+   - Arguments: `scripts\daily_valuation_snapshot.py`
+   - Start in: `D:\Hackathon\Project\agentic-investment-assistant\agentic-investment-assistant`
+4. Save — the Excel file now refreshes daily even if you never open the app
+
+**Option B — N8N (matches your hackathon's approved automation tool):**
+1. Run `python api_server.py` (keep it running, e.g. as a background service)
+2. In N8N: Schedule Trigger (daily) → HTTP Request node → `GET http://localhost:8000/snapshot`
+3. This regenerates the same Excel file via the API instead of a local scheduled script — useful if N8N is already your automation hub for other things (like the portfolio alert scan)
+
+Both options produce the exact same file — pick whichever fits how you're already managing this project.
+
 ## Roadmap
 
 | Day | Milestone |
@@ -621,5 +660,6 @@ response. Open the Dashboard tab to see the new donut charts.
 | Stretch 6 | General finance Q&A fallback ✅ |
 | Stretch 7 | Expanded client data + multi-asset portfolios (FD/RD/Bonds/schemes) ✅ |
 | Stretch 8 | Visual polish: clickable questions + donut charts ✅ |
+| Stretch 9 | Daily Excel valuation snapshot + fixed-date bug fix ✅ |
 
 🎉 **Build complete.** See `DEMO_SCRIPT.md` for your presentation guide.
