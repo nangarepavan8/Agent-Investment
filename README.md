@@ -348,6 +348,65 @@ its answer, rather than just reporting price.
 Try it: ask the chat *"What's the current sentiment on AAPL?"* or
 *"What's happening with MSFT?"*
 
+## Stretch Features, Round 3: Audit Trail + Evaluation + N8N Automation
+
+**1. Audit Trail / Compliance Logging (`src/audit_log.py`)**
+
+Directly addresses the "Governance and Security" judging category.
+Every tool call, portfolio scan, and advisor approve/reject decision
+is now written to a persistent log (`data/audit_log.csv`) — not just
+shown live in the UI and lost when the session ends.
+
+View it in the new **"📋 Audit Log"** tab — includes a CSV export
+button, useful for showing judges a real compliance record.
+
+Test standalone (no API cost):
+```bash
+python -m src.audit_log
+```
+
+**2. Agent Evaluation Harness (`tests/eval_harness.py`)**
+
+Formalizes testing into a pass/fail scorecard: 10 test queries, each
+with an expected tool (or tools), checked against what the agent
+actually called. Produces both a console report and a saved
+`data/eval_report.md` file — concrete evidence of testing rigor if a
+judge asks "how do you know this is reliable?"
+
+Run it (uses your API key, a few cents):
+```bash
+python tests/eval_harness.py
+```
+
+**3. N8N Automation Endpoint (`api_server.py`)**
+
+Exposes the portfolio scan as an HTTP endpoint so N8N — your
+hackathon's approved automation tool — can trigger it on a schedule
+instead of requiring a manual button click. This hits the "Process
+automation opportunities" judging category.
+
+Run the API server (separately from Streamlit):
+```bash
+python api_server.py
+```
+Then visit `http://localhost:8000/scan` in a browser or via curl —
+confirmed working end-to-end, returns the same alert data as the
+Portfolio Alerts tab, as JSON.
+
+**Wiring it to N8N** (do this only if you have N8N set up):
+1. In N8N, add a **Schedule Trigger** node (e.g. "every day at 8 AM")
+2. Add an **HTTP Request** node, method `GET`, URL `http://localhost:8000/scan`
+   (or wherever you deploy this)
+3. (Optional) Add a **Slack** or **Email** node after it, using the
+   `alert_count` and `alerts` fields from the response to notify
+   advisors automatically when clients need attention
+4. Activate the workflow
+
+If you don't have time to actually set up N8N before your demo, the
+API server alone is still a valid, demonstrable "automation-ready"
+component — you can explain the integration point exists and show the
+working endpoint, without needing a live N8N instance in the room.
+
 ## Roadmap
 
 | Day | Milestone |
@@ -364,5 +423,6 @@ Try it: ask the chat *"What's the current sentiment on AAPL?"* or
 | 10 | Polish + demo rehearsal ✅ |
 | Stretch | Reasoning trace + human-in-the-loop approval ✅ |
 | Stretch 2 | Proactive monitoring + sentiment-aware market context ✅ |
+| Stretch 3 | Audit trail + evaluation harness + N8N automation endpoint ✅ |
 
 🎉 **Build complete.** See `DEMO_SCRIPT.md` for your presentation guide.

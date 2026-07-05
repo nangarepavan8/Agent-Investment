@@ -16,6 +16,7 @@ from src.tools.data_loader import load_clients
 from src.tools.portfolio_summary import get_portfolio_summary
 from src.tools.risk_score import calc_risk_score
 from src.monitoring import scan_all_clients
+from src.audit_log import log_event, load_audit_log
 
 st.set_page_config(
     page_title="Agentic Investment Research Assistant",
@@ -84,7 +85,9 @@ with st.expander("ℹ️ How this works (architecture)"):
     Fabric, and Azure hosting for production, multi-user deployment.
     """)
 
-tab_chat, tab_dashboard, tab_alerts = st.tabs(["💬 Chat", "📊 Dashboard", "🔔 Portfolio Alerts"])
+tab_chat, tab_dashboard, tab_alerts, tab_audit = st.tabs(
+    ["💬 Chat", "📊 Dashboard", "🔔 Portfolio Alerts", "📋 Audit Log"]
+)
 
 # ---------------------------------------------------------------------------
 # DASHBOARD TAB - calls tools directly (no LLM), so it's instant and free
@@ -194,9 +197,11 @@ with tab_chat:
                 col_a, col_b = st.columns(2)
                 if col_a.button("✅ Approve", key=f"approve_{i}"):
                     st.session_state.messages[i]["approval_decision"] = "approved"
+                    log_event("approval_decision", selected_client_id, {"decision": "approved", "action": "rebalancing"})
                     st.rerun()
                 if col_b.button("❌ Reject", key=f"reject_{i}"):
                     st.session_state.messages[i]["approval_decision"] = "rejected"
+                    log_event("approval_decision", selected_client_id, {"decision": "rejected", "action": "rebalancing"})
                     st.rerun()
             elif msg.get("approval_decision") == "approved":
                 st.success("✅ Rebalancing suggestion approved by advisor.")
@@ -233,3 +238,34 @@ with tab_chat:
             "requires_approval": requires_approval,
         })
         st.rerun()
+
+# ---------------------------------------------------------------------------
+# AUDIT LOG TAB - persistent, exportable record of every autonomous action
+# the agent took and every advisor approve/reject decision. Addresses the
+# "Governance and Security" judging category from the hackathon poster.
+# ---------------------------------------------------------------------------
+with tab_audit:
+    st.subheader("Audit Trail")
+    st.caption(
+        "Every tool call the agent makes, every portfolio scan, and every "
+        "advisor approve/reject decision is logged here with a timestamp — "
+        "a persistent compliance record, not just a live UI trace."
+    )
+
+    audit_df = load_audit_log()
+
+    if audit_df.empty:
+        st.info("No audit events yet — interact with the Chat or run a Portfolio Scan to generate log entries.")
+    else:
+        # Most recent first
+        audit_df_display = audit_df.iloc[::-1].reset_index(drop=True)
+        st.dataframe(audit_df_display, use_container_width=True, hide_index=True)
+        st.caption(f"{len(audit_df)} total logged events.")
+
+        csv_data = audit_df.to_csv(index=False)
+        st.download_button(
+            "⬇️ Export audit log as CSV",
+            data=csv_data,
+            file_name="audit_log_export.csv",
+            mime="text/csv",
+        )

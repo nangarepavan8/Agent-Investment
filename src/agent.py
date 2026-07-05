@@ -22,6 +22,7 @@ from src.tools.risk_score import calc_risk_score
 from src.tools.rebalancing import suggest_rebalancing
 from src.tools.market_context import get_market_context
 from src.memory import store_memory, retrieve_relevant_memory
+from src.audit_log import log_event
 
 
 # ---------------------------------------------------------------------------
@@ -136,6 +137,17 @@ def run_agent(user_query: str, client_id: str = None, verbose: bool = True) -> d
     system_content = SYSTEM_PROMPT
     memory_hit_count = 0
 
+    # CRITICAL: explicitly tell the model which client is being discussed.
+    # Without this, phrases like "this portfolio" or "how should we rebalance
+    # it" give the LLM no way to know which client_id to pass into tool
+    # calls — it will either call no tool, or guess incorrectly.
+    if client_id:
+        system_content += (
+            f"\n\nThe advisor is currently viewing client {client_id}. "
+            f"Whenever a tool call needs a client_id and the user's question "
+            f"doesn't name a different client explicitly, use {client_id}."
+        )
+
     # Pull relevant past conversation for this client, if any exists
     if client_id:
         past_memories = retrieve_relevant_memory(client_id, user_query)
@@ -176,6 +188,8 @@ def run_agent(user_query: str, client_id: str = None, verbose: bool = True) -> d
             tool_trace.append({"name": tool_name, "args": tool_args})
             if tool_name == "rebalancing_tool":
                 requires_approval = True
+
+            log_event("tool_call", client_id, {"tool": tool_name, "args": tool_args, "query": user_query})
 
             selected_tool = TOOLS_BY_NAME[tool_name]
             tool_result = selected_tool.invoke(tool_args)

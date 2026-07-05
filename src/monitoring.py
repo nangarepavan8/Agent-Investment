@@ -24,6 +24,7 @@ from typing import List, Dict, Any
 
 from src.tools.data_loader import load_clients
 from src.tools.risk_score import calc_risk_score
+from src.audit_log import log_event
 
 SNAPSHOT_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "monitoring_snapshot.json"
@@ -33,12 +34,12 @@ SNAPSHOT_PATH = os.path.join(
 def _load_last_snapshot() -> Dict[str, Any]:
     if not os.path.exists(SNAPSHOT_PATH):
         return {}
-    with open(SNAPSHOT_PATH, "r") as f:
+    with open(SNAPSHOT_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
 def _save_snapshot(snapshot: Dict[str, Any]) -> None:
-    with open(SNAPSHOT_PATH, "w") as f:
+    with open(SNAPSHOT_PATH, "w", encoding="utf-8") as f:
         json.dump(snapshot, f, indent=2)
 
 
@@ -92,6 +93,7 @@ def scan_all_clients() -> List[Dict[str, Any]]:
             })
 
     _save_snapshot(new_snapshot)
+    log_event("portfolio_scan", None, {"alerts_found": len(alerts), "client_count": len(clients_df)})
     return alerts
 
 
