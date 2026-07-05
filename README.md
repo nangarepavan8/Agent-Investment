@@ -274,6 +274,80 @@ streamlit run app.py
 the actual demo** — saying your answers to the anticipated questions
 out loud is very different from just having read them.
 
+## Stretch Features (Post Day-10): Reasoning Trace + Human-in-the-Loop
+
+Two additions on top of the core 10-day build, chosen because they map
+directly to current trends in agentic AI (transparency and guardrails
+before autonomous action) and to your hackathon poster's "Governance
+and Security" judging category:
+
+**1. Visible reasoning trace**
+Every assistant reply in the chat now has a "🧠 Agent's reasoning"
+expander showing exactly which tool(s) were called, with what
+arguments, and how many memory items were used. This makes the
+agent's decision-making inspectable rather than a black box — good
+for judges, and genuinely useful for advisors who want to trust the
+answer.
+
+**2. Human-in-the-loop approval for rebalancing**
+Whenever the agent's answer includes a rebalancing suggestion, the UI
+shows an ✅ Approve / ❌ Reject step before treating it as actioned.
+This reflects a real, current theme in agentic AI: autonomous agents
+proposing actions should have a guardrail before anything is
+"confirmed," especially in a financial context.
+
+**What changed under the hood:** `run_agent()` now returns a dict
+(`answer`, `tool_calls`, `memory_hits`, `requires_approval`) instead of
+a plain string, so the UI can display the trace and approval step. If
+you're calling `run_agent()` anywhere else, update accordingly:
+```python
+result = run_agent(query, client_id="CLIENT_001")
+print(result["answer"])       # the text response
+print(result["tool_calls"])   # [{"name": ..., "args": {...}}, ...]
+print(result["requires_approval"])  # True if a rebalancing suggestion was made
+```
+
+Test it:
+```bash
+streamlit run app.py
+```
+Ask a rebalancing question and confirm the Approve/Reject buttons
+appear; expand "🧠 Agent's reasoning" on any answer to see the trace.
+
+## Stretch Features, Round 2: Proactive Monitoring + Sentiment-Aware Market Data
+
+**1. Proactive Portfolio Health Scan (`src/monitoring.py`)**
+
+This is the biggest differentiator added so far: everything before this
+was *reactive* (the agent only responds when asked about a specific
+client). This scans **all 10 clients at once** and surfaces anything
+needing attention — unprompted. It flags:
+- Any client currently at High risk
+- Any client whose risk score increased since the last scan (tracked
+  via a local snapshot file, `data/monitoring_snapshot.json`, auto-created
+  and gitignored)
+
+This directly matches the "proactive and adaptive" language from your
+own problem statement — it's the clearest example of the agent doing
+more than answer questions.
+
+Try it: open the **"🔔 Portfolio Alerts"** tab in the app and click
+**"Run Portfolio Scan."** Test it standalone (no API cost, pure Python):
+```bash
+python -m src.monitoring
+```
+
+**2. News/Sentiment-Aware Market Context**
+
+`get_market_context()` now also pulls up to 3 recent news headlines
+for a stock (via yfinance's free `.news` — no new API or key needed).
+The agent's system prompt was updated so GPT-4o briefly characterizes
+sentiment (positive/neutral/negative) from those headlines as part of
+its answer, rather than just reporting price.
+
+Try it: ask the chat *"What's the current sentiment on AAPL?"* or
+*"What's happening with MSFT?"*
+
 ## Roadmap
 
 | Day | Milestone |
@@ -288,5 +362,7 @@ out loud is very different from just having read them.
 | 8 | Dashboard view ✅ |
 | 9 | Full run-through + bug fixes ✅ |
 | 10 | Polish + demo rehearsal ✅ |
+| Stretch | Reasoning trace + human-in-the-loop approval ✅ |
+| Stretch 2 | Proactive monitoring + sentiment-aware market context ✅ |
 
 🎉 **Build complete.** See `DEMO_SCRIPT.md` for your presentation guide.

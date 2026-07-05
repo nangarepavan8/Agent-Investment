@@ -25,16 +25,22 @@ TVS Next InnovAIte 2026 — Agentic Investment Research Assistant
 Click the **"ℹ️ How this works"** expander in the app itself — it's already written out. Point at it, don't read it word for word:
 > "The agent reasons about which of 4 tools to call, executes them against portfolio data, and remembers context via vector memory — that's the agentic part, not just a chatbot wrapper."
 
-### 3. Live demo — the core flow (2.5 minutes)
+### 3. Live demo — the core flow (3 minutes)
 
-Pick one client (e.g. CLIENT_001) and run this exact sequence — it's designed to show routing, multi-tool reasoning, and memory in one flow:
+**Start with the "🔔 Portfolio Alerts" tab** — click "Run Portfolio Scan"
+and narrate:
+> "Before anyone even asks a question, the agent can proactively scan every client and flag who needs attention right now — this is the difference between a chatbot and a proactive agent."
+
+Then pick one flagged client (e.g. CLIENT_001) and switch to Chat for this sequence:
 
 | Step | You ask | What it demonstrates |
 |---|---|---|
 | 1 | *"What does this portfolio look like?"* | Tool routing — calls `portfolio_summary_tool` |
 | 2 | *"How risky is it?"* | Routing again — calls `risk_score_tool`, and note "it" already resolves correctly |
-| 3 | *"How should we rebalance it?"* | **Memory** — uses the risk context from step 2 without you repeating anything |
-| 4 | *"What's the current price of AAPL?"* | Real, live public market data — not synthetic |
+| 3 | *"How should we rebalance it?"* | **Memory** — uses the risk context from step 2 without you repeating anything. Note the ✅/❌ approval buttons that appear — click "Approve" and narrate: "this is a deliberate guardrail — the agent proposes, the advisor decides." |
+| 4 | *"What's the current sentiment on AAPL?"* | Real, live public market data **plus** recent news headlines — the agent characterizes sentiment, not just price |
+
+On any answer, click **"🧠 Agent's reasoning"** at least once during the demo to show the tool-call trace — this makes the routing decision visible rather than a black box, which judges specifically respond well to.
 
 While it's "thinking," narrate what's happening rather than sitting in silence:
 > "It's deciding which tool applies right now, then it'll pull the real numbers from the synthetic dataset."
@@ -68,6 +74,9 @@ Switch tabs. Point out:
 
 **"What happens if the agent picks the wrong tool?"**
 > During testing we hardened this — each tool independently validates its input and returns a clear error message rather than crashing, so even an edge case degrades gracefully instead of breaking the whole response.
+
+**"Is this only reactive, or does it do anything proactively?"**
+> The Portfolio Alerts tab scans every client's risk profile without being asked and flags anything needing attention — that's the proactive half of "proactive and adaptive" agentic AI, not just a chatbot answering questions on demand.
 
 ---
 

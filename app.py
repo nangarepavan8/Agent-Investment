@@ -15,6 +15,7 @@ from src.agent import run_agent
 from src.tools.data_loader import load_clients
 from src.tools.portfolio_summary import get_portfolio_summary
 from src.tools.risk_score import calc_risk_score
+from src.monitoring import scan_all_clients
 
 st.set_page_config(
     page_title="Agentic Investment Research Assistant",
@@ -83,7 +84,7 @@ with st.expander("ℹ️ How this works (architecture)"):
     Fabric, and Azure hosting for production, multi-user deployment.
     """)
 
-tab_chat, tab_dashboard = st.tabs(["💬 Chat", "📊 Dashboard"])
+tab_chat, tab_dashboard, tab_alerts = st.tabs(["💬 Chat", "📊 Dashboard", "🔔 Portfolio Alerts"])
 
 # ---------------------------------------------------------------------------
 # DASHBOARD TAB - calls tools directly (no LLM), so it's instant and free
@@ -128,6 +129,38 @@ with tab_dashboard:
         st.error(f"Could not load dashboard: {e}")
 
 # ---------------------------------------------------------------------------
+# ALERTS TAB - proactive monitoring across ALL clients (not just the
+# one selected in the sidebar). This is what makes the agent "proactive"
+# rather than purely reactive - it surfaces issues unprompted.
+# ---------------------------------------------------------------------------
+with tab_alerts:
+    st.subheader("Portfolio Health Scan")
+    st.caption(
+        "Unlike the chat, which only answers about the client you ask, this scans "
+        "ALL 10 clients at once and proactively flags anything needing attention — "
+        "high risk levels, or risk scores that increased since the last scan."
+    )
+
+    if st.button("🔍 Run Portfolio Scan"):
+        with st.spinner("Scanning all client portfolios..."):
+            alerts = scan_all_clients()
+        st.session_state.last_alerts = alerts
+
+    if "last_alerts" in st.session_state:
+        alerts = st.session_state.last_alerts
+        if not alerts:
+            st.success("✅ No alerts — all clients are within normal risk range.")
+        else:
+            st.warning(f"⚠️ {len(alerts)} client(s) need attention:")
+            for alert in alerts:
+                if alert["alert_type"] == "high_risk":
+                    st.error(f"🔴 {alert['message']}")
+                else:
+                    st.warning(f"🟠 {alert['message']}")
+    else:
+        st.info("Click 'Run Portfolio Scan' to check all clients for risk issues.")
+
+# ---------------------------------------------------------------------------
 # CHAT TAB
 # ---------------------------------------------------------------------------
 with tab_chat:
@@ -142,10 +175,33 @@ with tab_chat:
         st.session_state.messages = []
         st.session_state.last_client = selected_client_id
 
-    # Render past messages
-    for msg in st.session_state.messages:
+    # Render past messages (including any stored reasoning trace / approval state)
+    for i, msg in enumerate(st.session_state.messages):
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
+
+            # Show the reasoning trace for assistant messages that used tools
+            if msg["role"] == "assistant" and msg.get("tool_calls"):
+                with st.expander("🧠 Agent's reasoning"):
+                    for tc in msg["tool_calls"]:
+                        st.markdown(f"- Called `{tc['name']}` with `{tc['args']}`")
+                    if msg.get("memory_hits"):
+                        st.markdown(f"- Used {msg['memory_hits']} relevant memory item(s) from past conversation")
+
+            # Human-in-the-loop: show approve/reject for rebalancing suggestions
+            if msg["role"] == "assistant" and msg.get("requires_approval") and not msg.get("approval_decision"):
+                st.warning("This includes a rebalancing suggestion — advisor approval required before acting on it.")
+                col_a, col_b = st.columns(2)
+                if col_a.button("✅ Approve", key=f"approve_{i}"):
+                    st.session_state.messages[i]["approval_decision"] = "approved"
+                    st.rerun()
+                if col_b.button("❌ Reject", key=f"reject_{i}"):
+                    st.session_state.messages[i]["approval_decision"] = "rejected"
+                    st.rerun()
+            elif msg.get("approval_decision") == "approved":
+                st.success("✅ Rebalancing suggestion approved by advisor.")
+            elif msg.get("approval_decision") == "rejected":
+                st.error("❌ Rebalancing suggestion rejected by advisor.")
 
     user_input = st.chat_input("Ask about this client's portfolio, risk, or a stock...")
 
@@ -157,9 +213,23 @@ with tab_chat:
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
                 try:
-                    answer = run_agent(user_input, client_id=selected_client_id, verbose=False)
+                    result = run_agent(user_input, client_id=selected_client_id, verbose=False)
+                    answer = result["answer"]
+                    tool_calls = result["tool_calls"]
+                    memory_hits = result["memory_hits"]
+                    requires_approval = result["requires_approval"]
                 except Exception as e:
                     answer = f"⚠️ Something went wrong: {e}"
+                    tool_calls = []
+                    memory_hits = 0
+                    requires_approval = False
             st.markdown(answer)
 
-        st.session_state.messages.append({"role": "assistant", "content": answer})
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": answer,
+            "tool_calls": tool_calls,
+            "memory_hits": memory_hits,
+            "requires_approval": requires_approval,
+        })
+        st.rerun()

@@ -70,9 +70,10 @@ def rebalancing_tool(client_id: str) -> str:
 
 @tool
 def market_context_tool(symbol: str) -> str:
-    """Get live public market data for a stock symbol: current price,
-    today's % change, and 52-week range. Use this when the user asks
-    about current market conditions, price, or performance of a
+    """Get live public market data AND recent news headlines for a stock
+    symbol: current price, today's % change, 52-week range, and up to 3
+    recent headlines. Use this when the user asks about current market
+    conditions, price, performance, or recent news/sentiment for a
     specific stock ticker (e.g. AAPL, MSFT)."""
     try:
         return json.dumps(get_market_context(symbol))
@@ -98,10 +99,15 @@ advisor-friendly answer — don't just dump raw JSON at the user.
 If a tool result contains an "error" field, don't show raw JSON or a
 stack trace to the user — explain the issue in plain language (e.g. an
 invalid client ID) and suggest a valid alternative (valid client IDs
-are CLIENT_001 through CLIENT_010)."""
+are CLIENT_001 through CLIENT_010).
+
+If a market context tool result includes "recent_headlines", briefly
+characterize the overall sentiment (positive, neutral, or negative)
+those headlines suggest for that stock, in one sentence — don't just
+list the headlines verbatim."""
 
 
-def run_agent(user_query: str, client_id: str = None, verbose: bool = True) -> str:
+def run_agent(user_query: str, client_id: str = None, verbose: bool = True) -> dict:
     """
     Run one query through the agent: retrieve relevant past memory (if a
     client_id is given), let GPT-4o decide which tool(s) to call, execute
@@ -114,16 +120,27 @@ def run_agent(user_query: str, client_id: str = None, verbose: bool = True) -> s
                    the query runs without memory context (useful for
                    generic questions not tied to one client).
         verbose: print which tools get called, for debugging/demo narration
+
+    Returns:
+        dict with:
+            answer (str): the final natural-language response
+            tool_calls (list[dict]): each tool the agent invoked, with its
+                name and arguments — this is the "reasoning trace"
+            requires_approval (bool): True if a rebalancing suggestion was
+                made, signaling the UI should show an approve/reject step
+                before treating it as actioned (human-in-the-loop guardrail)
     """
     llm = ChatOpenAI(model=OPENAI_MODEL, api_key=OPENAI_API_KEY, temperature=0)
     llm_with_tools = llm.bind_tools(ALL_TOOLS)
 
     system_content = SYSTEM_PROMPT
+    memory_hit_count = 0
 
     # Pull relevant past conversation for this client, if any exists
     if client_id:
         past_memories = retrieve_relevant_memory(client_id, user_query)
         if past_memories:
+            memory_hit_count = len(past_memories)
             memory_context = "\n\n".join(past_memories)
             system_content += (
                 f"\n\nRelevant past conversation with this client:\n{memory_context}\n"
@@ -131,12 +148,15 @@ def run_agent(user_query: str, client_id: str = None, verbose: bool = True) -> s
                 f"but prioritize fresh tool data for anything numeric."
             )
             if verbose:
-                print(f"  🧠 Retrieved {len(past_memories)} relevant past memory item(s)")
+                print(f"  🧠 Retrieved {memory_hit_count} relevant past memory item(s)")
 
     messages = [
         SystemMessage(content=system_content),
         HumanMessage(content=user_query),
     ]
+
+    tool_trace = []
+    requires_approval = False
 
     # First call: let the model decide which tool(s), if any, to invoke
     ai_msg = llm_with_tools.invoke(messages)
@@ -153,6 +173,10 @@ def run_agent(user_query: str, client_id: str = None, verbose: bool = True) -> s
             if verbose:
                 print(f"  🔧 Agent is calling: {tool_name}({tool_args})")
 
+            tool_trace.append({"name": tool_name, "args": tool_args})
+            if tool_name == "rebalancing_tool":
+                requires_approval = True
+
             selected_tool = TOOLS_BY_NAME[tool_name]
             tool_result = selected_tool.invoke(tool_args)
 
@@ -168,7 +192,12 @@ def run_agent(user_query: str, client_id: str = None, verbose: bool = True) -> s
     if client_id:
         store_memory(client_id, user_query, final_answer)
 
-    return final_answer
+    return {
+        "answer": final_answer,
+        "tool_calls": tool_trace,
+        "memory_hits": memory_hit_count,
+        "requires_approval": requires_approval,
+    }
 
 
 if __name__ == "__main__":
@@ -180,9 +209,14 @@ if __name__ == "__main__":
     print("--- First query ---")
     q1 = "How risky is CLIENT_001's portfolio?"
     print(f"Query: {q1}\n")
-    print(f"Answer: {run_agent(q1, client_id=client)}\n")
+    result1 = run_agent(q1, client_id=client)
+    print(f"Answer: {result1['answer']}")
+    print(f"Tool calls: {result1['tool_calls']}\n")
 
     print("--- Follow-up query (tests memory) ---")
     q2 = "Based on that, how should we rebalance it?"
     print(f"Query: {q2}\n")
-    print(f"Answer: {run_agent(q2, client_id=client)}\n")
+    result2 = run_agent(q2, client_id=client)
+    print(f"Answer: {result2['answer']}")
+    print(f"Tool calls: {result2['tool_calls']}")
+    print(f"Requires approval: {result2['requires_approval']}\n")

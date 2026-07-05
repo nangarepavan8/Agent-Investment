@@ -52,8 +52,9 @@ def run():
             total += 1
             print(f"\n--- Query: '{query}' (client={client_id}) ---")
             try:
-                answer = run_agent(query, client_id=client_id, verbose=True)
-                print(f"Answer: {answer}")
+                result = run_agent(query, client_id=client_id, verbose=True)
+                print(f"Answer: {result['answer']}")
+                print(f"Tool calls: {result['tool_calls']}")
             except Exception as e:
                 print(f"❌ CRASHED: {e}")
 

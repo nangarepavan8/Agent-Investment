@@ -31,8 +31,9 @@ def run_all():
         print(f"TEST {i}: {query}")
         print("=" * 60)
         try:
-            answer = run_agent(query)
-            print(f"\nAgent's answer:\n{answer}")
+            result = run_agent(query)
+            print(f"\nAgent's answer:\n{result['answer']}")
+            print(f"\nTool calls made: {result['tool_calls']}")
         except Exception as e:
             print(f"\n❌ ERROR: {e}")
 

@@ -12,6 +12,9 @@ venv/
 chroma_db/
 *.sqlite3
 
+# Monitoring snapshot (generated state, not source)
+data/monitoring_snapshot.json
+
 # OS
 .DS_Store
 
