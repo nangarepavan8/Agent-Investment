@@ -23,7 +23,7 @@ portfolio still renders correctly instead of the whole tool failing.
 from typing import Dict, Any
 import yfinance as yf
 from src.tools.data_loader import get_client_holdings, get_client_info, get_client_other_investments
-from src.tools.fixed_income import value_instrument, inr_to_usd
+from src.tools.fixed_income import value_instrument
 
 
 def _get_live_price(symbol: str):
@@ -132,19 +132,13 @@ def get_portfolio_summary(client_id: str) -> Dict[str, Any]:
         })
 
     # --- Cash (no gain/loss, just uninvested balance) ---
-    # NOTE: cash_balance and other_investments are denominated in INR;
-    # stocks are denominated in USD (real US tickers). Convert INR to USD
-    # equivalent (fixed demo rate) before combining into one grand total —
-    # otherwise rupees would be miscounted as if they were dollars.
+    # Stocks, cash, and FD/RD/Bonds/schemes are ALL in INR now (real
+    # Indian tickers via NSE) — no currency conversion needed.
     cash_balance_inr = round(float(client_info["cash_balance"]), 2)
-    cash_balance_usd = round(inr_to_usd(cash_balance_inr), 2)
 
-    other_current_value_usd = round(inr_to_usd(other_current_value), 2)
-    other_cost_basis_usd = round(inr_to_usd(other_cost_basis), 2)
-
-    # --- Grand totals across ALL asset classes, normalized to USD ---
-    total_current_value = round(stocks_current_value + other_current_value_usd + cash_balance_usd, 2)
-    total_cost_basis = round(stocks_cost_basis + other_cost_basis_usd + cash_balance_usd, 2)
+    # --- Grand totals across ALL asset classes (all INR) ---
+    total_current_value = round(stocks_current_value + other_current_value + cash_balance_inr, 2)
+    total_cost_basis = round(stocks_cost_basis + other_cost_basis + cash_balance_inr, 2)
     total_gain_loss = round(total_current_value - total_cost_basis, 2)
     total_gain_loss_pct = round((total_gain_loss / total_cost_basis) * 100, 2) if total_cost_basis else 0.0
 
@@ -157,16 +151,12 @@ def get_portfolio_summary(client_id: str) -> Dict[str, Any]:
         for sector, value in sector_current_totals.items()
     } if stocks_current_value else {}
 
-    # --- Asset-class allocation (across EVERYTHING — the bigger picture)
-    # Uses USD-normalized values so percentages are correct; the
-    # per-instrument INR figures above remain in their original currency
-    # for advisor-readable display.
+    # --- Asset-class allocation (across EVERYTHING — the bigger picture) ---
     asset_totals = {"Stocks": round(stocks_current_value, 2)}
     for inv in other_investments_list:
-        inv_value_usd = round(inr_to_usd(inv["current_value"]), 2)
-        asset_totals[inv["instrument_type"]] = asset_totals.get(inv["instrument_type"], 0) + inv_value_usd
-    if cash_balance_usd:
-        asset_totals["Cash"] = cash_balance_usd
+        asset_totals[inv["instrument_type"]] = asset_totals.get(inv["instrument_type"], 0) + inv["current_value"]
+    if cash_balance_inr:
+        asset_totals["Cash"] = cash_balance_inr
 
     asset_allocation = {
         asset_type: round((value / total_current_value) * 100, 1)
@@ -183,7 +173,7 @@ def get_portfolio_summary(client_id: str) -> Dict[str, Any]:
         "investment_goal": client_info.get("investment_goal"),
         "time_horizon": client_info.get("time_horizon"),
         "total_value": total_current_value,
-        "total_value_currency_note": "Normalized to USD — cash/FD/RD/bonds/govt schemes are held in INR and converted at a fixed demo rate (1 USD = 83 INR) for this total.",
+        "total_value_currency_note": "All figures in INR (₹) — stocks are real NSE-listed Indian tickers, consistent with cash/FD/RD/bonds/schemes.",
         "total_cost_basis": total_cost_basis,
         "total_gain_loss": total_gain_loss,
         "total_gain_loss_pct": total_gain_loss_pct,

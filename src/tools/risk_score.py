@@ -19,7 +19,6 @@ across the FULL portfolio, not just the equity slice.
 
 from typing import Dict, Any
 from src.tools.data_loader import get_client_holdings, get_client_info, get_client_other_investments
-from src.tools.fixed_income import inr_to_usd
 
 RISK_PROFILE_BIAS = {
     "Conservative": 0,
@@ -84,12 +83,10 @@ def calc_risk_score(client_id: str) -> Dict[str, Any]:
 
     # Factor 4: safe-asset allocation (cash + FD/RD/Bonds/govt schemes)
     # offsets pure stock-concentration risk, assessed across the FULL
-    # portfolio. NOTE: cash/FD/RD/bonds are held in INR while stocks are
-    # in USD (real US tickers) — convert to USD equivalent (fixed demo
-    # rate) before comparing, otherwise rupees get miscounted as dollars.
+    # portfolio. Stocks are now real Indian (NSE) tickers, priced in INR
+    # — same currency as cash/FD/RD/bonds, so no conversion needed.
     other_df = get_client_other_investments(client_id)
-    safe_assets_inr = float(other_df["principal_amount"].sum()) + float(client_info.get("cash_balance", 0))
-    safe_assets = inr_to_usd(safe_assets_inr)
+    safe_assets = float(other_df["principal_amount"].sum()) + float(client_info.get("cash_balance", 0))
     risky_assets = float(total_value)
     total_assets = safe_assets + risky_assets
     safe_ratio_pct = (safe_assets / total_assets * 100) if total_assets else 0

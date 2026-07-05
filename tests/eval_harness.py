@@ -47,6 +47,7 @@ EVAL_CASES = [
     ("CLIENT_001", "Which stocks should I book profit on?", ["profit_booking_tool"]),
     (None, "Should I invest in TCS?", ["market_context_tool"]),
     (None, "What is diversification?", []),
+    (None, "How is the IT sector doing today?", ["sector_performance_tool"]),
 ]
 
 

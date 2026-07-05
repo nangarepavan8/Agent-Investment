@@ -53,8 +53,8 @@ EXAMPLE_QUESTIONS = {
         "Should I invest in TCS?",
         "What's the outlook on AAPL?",
         "What will Infosys's future be?",
-        "What's the sentiment on MSFT right now?",
-        "Is Reliance a good buy?",
+        "How is the IT sector doing today?",
+        "Which sector is performing best right now?",
     ],
     "General Finance": [
         "What is diversification?",
@@ -145,13 +145,13 @@ with tab_dashboard:
         )
 
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Total Portfolio Value", f"${summary['total_value']:,.2f}")
+        col1.metric("Total Portfolio Value", f"₹{summary['total_value']:,.2f}")
 
         gain_loss = summary["total_gain_loss"]
         gain_loss_pct = summary["total_gain_loss_pct"]
         col2.metric(
             "Unrealized Gain/Loss",
-            f"${gain_loss:,.2f}",
+            f"₹{gain_loss:,.2f}",
             f"{gain_loss_pct:+.2f}%",
             delta_color="normal",
         )

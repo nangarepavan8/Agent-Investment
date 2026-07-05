@@ -42,15 +42,20 @@ INVESTMENT_GOALS = ["Retirement", "Wealth Growth", "Child Education", "Home Purc
 TIME_HORIZONS = ["Short-term (<3 yrs)", "Medium-term (3-7 yrs)", "Long-term (>7 yrs)"]
 INCOME_BRACKETS = ["₹5-10 LPA", "₹10-25 LPA", "₹25-50 LPA", "₹50+ LPA"]
 
-# Real public tickers grouped by sector — used only for realistic demo
-# data (yfinance pulls live prices for these in the market/portfolio tools)
+# Real, publicly-traded Indian (NSE) stock tickers grouped by sector —
+# used only for realistic demo data. yfinance pulls LIVE prices for
+# these; the ".NS" suffix targets the National Stock Exchange of India.
+# Using real Indian tickers means portfolio holdings are now priced in
+# INR — the SAME currency as cash/FD/RD/bonds, which removes the
+# earlier USD/INR conversion complexity entirely (see fixed_income.py).
 SECTOR_TICKERS = {
-    "Technology": ["AAPL", "MSFT", "GOOGL", "NVDA", "META"],
-    "Healthcare": ["JNJ", "PFE", "UNH", "ABBV"],
-    "Financials": ["JPM", "BAC", "V", "MA"],
-    "Consumer": ["AMZN", "TSLA", "MCD", "NKE"],
-    "Energy": ["XOM", "CVX"],
-    "Industrials": ["CAT", "BA", "HON"],
+    "IT": ["TCS.NS", "INFY.NS", "WIPRO.NS", "HCLTECH.NS", "TECHM.NS"],
+    "Banking": ["HDFCBANK.NS", "ICICIBANK.NS", "SBIN.NS", "KOTAKBANK.NS", "AXISBANK.NS"],
+    "Energy": ["RELIANCE.NS", "ONGC.NS", "NTPC.NS", "POWERGRID.NS"],
+    "FMCG": ["HINDUNILVR.NS", "ITC.NS", "NESTLEIND.NS", "TITAN.NS"],
+    "Automobile": ["TATAMOTORS.NS", "MARUTI.NS", "BAJAJ-AUTO.NS", "EICHERMOT.NS"],
+    "Pharma": ["SUNPHARMA.NS", "DRREDDY.NS", "CIPLA.NS", "DIVISLAB.NS"],
+    "Industrials": ["LT.NS", "ADANIPORTS.NS", "ULTRACEMCO.NS"],
 }
 ALL_SECTORS = list(SECTOR_TICKERS.keys())
 
@@ -130,8 +135,8 @@ def generate_holdings(clients):
                 SECTOR_TICKERS[sector], min(num_holdings_in_sector, len(SECTOR_TICKERS[sector]))
             )
             for ticker in tickers_in_sector:
-                quantity = random.randint(5, 100)
-                purchase_price = round(random.uniform(50, 500), 2)
+                quantity = random.randint(5, 50)
+                purchase_price = round(random.uniform(300, 4000), 2)  # realistic INR share price range
                 purchase_date = random_past_date(30, 900)  # 1 month to ~2.5 years ago
 
                 holdings.append({

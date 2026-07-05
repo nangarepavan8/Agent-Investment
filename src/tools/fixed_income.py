@@ -25,17 +25,10 @@ from typing import Dict, Any
 def _today() -> date:
     return date.today()
 
-# DEMO SIMPLIFICATION: stocks are priced in USD (real US tickers via
-# yfinance), while cash/FD/RD/bonds/government schemes are denominated
-# in INR (realistic for an Indian wealth-management context). A fixed
-# conversion rate is used to combine them into one consistent total —
-# not a live FX rate, but transparent and good enough for demo purposes.
-USD_TO_INR_RATE = 83.0
-
-
-def inr_to_usd(inr_amount: float) -> float:
-    """Convert an INR amount to its USD equivalent using the fixed demo rate."""
-    return inr_amount / USD_TO_INR_RATE
+# UPDATE: stock holdings now use real Indian (NSE) tickers, priced in
+# INR — the SAME currency as cash/FD/RD/bonds/government schemes. The
+# earlier USD/INR conversion (needed when stock holdings were US
+# tickers) is no longer necessary; everything is natively INR now.
 
 
 def _years_elapsed(start_date_str: str) -> float:

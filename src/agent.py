@@ -22,6 +22,7 @@ from src.tools.risk_score import calc_risk_score
 from src.tools.rebalancing import suggest_rebalancing
 from src.tools.market_context import get_market_context
 from src.tools.profit_booking import suggest_profit_booking
+from src.tools.sector_performance import get_sector_performance
 from src.memory import store_memory, retrieve_relevant_memory
 from src.audit_log import log_event
 
@@ -108,7 +109,23 @@ def profit_booking_tool(client_id: str) -> str:
         return json.dumps({"error": str(e)})
 
 
-ALL_TOOLS = [portfolio_summary_tool, risk_score_tool, rebalancing_tool, market_context_tool, profit_booking_tool]
+@tool
+def sector_performance_tool(sector_name: str = None) -> str:
+    """Get REAL, LIVE today's performance for Nifty sector indices (IT,
+    Banking, Automobile, Pharma, FMCG, Energy, Metal, Realty). Use this
+    when the user asks how a sector is doing today, which sector is
+    performing best/worst, or wants a market-wide sector comparison —
+    NOT for a specific client's portfolio sector allocation (use
+    portfolio_summary_tool for that instead). Pass sector_name for one
+    specific sector, or omit it to get all sectors."""
+    try:
+        return json.dumps(get_sector_performance(sector_name))
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+ALL_TOOLS = [portfolio_summary_tool, risk_score_tool, rebalancing_tool, market_context_tool,
+             profit_booking_tool, sector_performance_tool]
 
 TOOLS_BY_NAME = {t.name: t for t in ALL_TOOLS}
 
@@ -160,10 +177,17 @@ Before answering, silently work through:
   sell/book profit on", "any tax-loss harvesting opportunities".
 - **market_context_tool** — live price, fundamentals (P/E, market
   cap), analyst recommendation/target, and news sentiment for ANY
-  stock ticker (US or Indian — Indian tickers resolve automatically).
-  Use for: price/valuation/outlook questions about a specific stock,
-  including "should I invest in X" and "what's X's future" (see
-  responsible-investing rules below — this tool informs, never predicts).
+  stock ticker (Indian tickers resolve automatically via NSE/.NS or
+  BSE/.BO; global tickers like AAPL also work). Use for: price/
+  valuation/outlook questions about a specific stock, including
+  "should I invest in X" and "what's X's future" (see responsible-
+  investing rules below — this tool informs, never predicts).
+- **sector_performance_tool** — REAL, LIVE today's performance for
+  Nifty sector indices (IT, Banking, Automobile, Pharma, FMCG, Energy,
+  Metal, Realty). Use for market-wide sector questions ("how's the IT
+  sector doing today", "which sector is performing best") — NOT for a
+  specific client's own sector allocation (use portfolio_summary_tool
+  for that).
 - **No tool** — general finance/investing education (e.g. "what is
   diversification", "how does compound interest work", "ETF vs mutual
   fund", "what is a P/E ratio") is answered directly from your own
@@ -177,9 +201,11 @@ client_id must always be in the format CLIENT_001 through CLIENT_010.
   busy; don't bury the number they asked for in a preamble.
 - Use short paragraphs or bullet points for multi-part answers (e.g.
   risk factors, rebalancing actions) — never dump raw JSON.
-- Always use the correct currency symbol from the data: $ for
-  stock/USD figures, ₹ for cash/FD/RD/bond/scheme/INR figures. Never
-  mix them or imply a false equivalence without noting the conversion.
+- All client portfolio figures (stocks, cash, FD, RD, bonds, schemes)
+  are in INR (₹) — real Indian (NSE) tickers, consistent throughout.
+  If market_context_tool is used for a non-Indian ticker (e.g. AAPL),
+  it will return USD ($) — use whatever currency the tool result
+  actually shows, and never blur the two together in one figure.
 - Cite specific numbers from tool results precisely (e.g. "risk score
   of 65/100", not "moderately risky") — precision is what makes you
   useful to a professional.
