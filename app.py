@@ -39,12 +39,31 @@ selected_label = st.sidebar.selectbox("Choose a client", list(client_options.key
 selected_client_id = client_options[selected_label]
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("**Try asking:**")
+st.sidebar.markdown("**Try asking — Your Portfolio:**")
 st.sidebar.markdown("""
-- What does this client's portfolio look like?
+- What's this portfolio worth right now?
+- Is this client up or down overall?
 - How risky is this portfolio?
 - How should we rebalance it?
-- What's the current price of AAPL?
+- Which stocks should I book profit on?
+""")
+
+st.sidebar.markdown("**Try asking — Stock Research:**")
+st.sidebar.markdown("""
+- Should I invest in TCS?
+- What's the outlook on AAPL?
+- What will Infosys's future be?
+- What's the sentiment on MSFT right now?
+- Is Reliance a good buy?
+""")
+
+st.sidebar.markdown("**Try asking — General Finance:**")
+st.sidebar.markdown("""
+- What is diversification?
+- How does compound interest work?
+- What's the difference between a mutual fund and an ETF?
+- What is a P/E ratio?
+- What's the difference between stocks and bonds?
 """)
 
 if st.sidebar.button("🗑️ Clear conversation"):
@@ -68,10 +87,22 @@ with st.expander("ℹ️ How this works (architecture)"):
     relevant past conversation context → GPT-4o synthesizes a final answer.
 
     **Tools available to the agent:**
-    - `get_portfolio_summary` — holdings, value, sector allocation
+    - `get_portfolio_summary` — real-time market value, gain/loss, sector allocation
     - `calc_risk_score` — 0-100 score with explainable contributing factors
     - `suggest_rebalancing` — rule-based rebalancing suggestions
-    - `get_market_context` — live public stock prices via yfinance
+    - `get_market_context` — live prices, fundamentals, analyst sentiment, news (any US or Indian ticker)
+    - `profit_booking_tool` — flags holdings with significant gains/losses for profit-booking or tax-loss harvesting
+
+    **Responsible by design:** For open-ended questions like "should I
+    invest in X," the agent presents factual data (price, fundamentals,
+    analyst view, sentiment) rather than a confident buy/sell call, and
+    never predicts future prices — consistent with how real financial
+    tools and advisors operate.
+
+    **General finance questions** (e.g. "what is diversification?",
+    "how does compound interest work?") are answered directly from the
+    model's own knowledge — not every question needs a tool call, only
+    ones involving a specific client or live stock data.
 
     **Memory:** Every exchange is stored per-client in ChromaDB (local
     vector store), so follow-up questions like *"how should we rebalance
@@ -97,21 +128,47 @@ with tab_dashboard:
         summary = get_portfolio_summary(selected_client_id)
         risk = calc_risk_score(selected_client_id)
 
-        col1, col2, col3 = st.columns(3)
+        st.caption(
+            f"👤 Age {summary.get('age', '—')} · Goal: {summary.get('investment_goal', '—')} · "
+            f"Horizon: {summary.get('time_horizon', '—')}"
+        )
+
+        col1, col2, col3, col4 = st.columns(4)
         col1.metric("Total Portfolio Value", f"${summary['total_value']:,.2f}")
+
+        gain_loss = summary["total_gain_loss"]
+        gain_loss_pct = summary["total_gain_loss_pct"]
+        col2.metric(
+            "Unrealized Gain/Loss",
+            f"${gain_loss:,.2f}",
+            f"{gain_loss_pct:+.2f}%",
+            delta_color="normal",
+        )
 
         risk_level = risk["risk_level"]
         risk_emoji = {"Low": "🟢", "Medium": "🟡", "High": "🔴"}.get(risk_level, "")
-        col2.metric("Risk Score", f"{risk['risk_score']} / 100", f"{risk_emoji} {risk_level}")
+        col3.metric("Risk Score", f"{risk['risk_score']} / 100", f"{risk_emoji} {risk_level}")
 
-        col3.metric("Number of Holdings", len(summary["holdings"]))
+        col4.metric("Cash Balance", f"₹{summary['cash_balance_inr']:,.0f}")
+
+        if summary.get("note"):
+            st.caption(f"⚠️ {summary['note']}")
+        st.caption(f"ℹ️ {summary.get('total_value_currency_note', '')}")
 
         st.markdown("---")
 
         chart_col, factors_col = st.columns([2, 1])
 
         with chart_col:
-            st.subheader("Sector Allocation")
+            st.subheader("Asset Allocation (All Asset Classes)")
+            if summary["asset_allocation"]:
+                asset_df = pd.DataFrame(
+                    list(summary["asset_allocation"].items()),
+                    columns=["Asset Class", "Allocation %"],
+                ).set_index("Asset Class")
+                st.bar_chart(asset_df)
+
+            st.subheader("Sector Allocation (Within Stocks)")
             allocation_df = pd.DataFrame(
                 list(summary["sector_allocation"].items()),
                 columns=["Sector", "Allocation %"],
@@ -124,9 +181,16 @@ with tab_dashboard:
                 st.markdown(f"- {factor}")
 
         st.markdown("---")
-        st.subheader("Holdings Detail")
+        st.subheader("Stock Holdings")
         holdings_df = pd.DataFrame(summary["holdings"])
         st.dataframe(holdings_df, use_container_width=True, hide_index=True)
+
+        if summary["other_investments"]:
+            st.subheader("Fixed Deposits, Bonds & Government Schemes")
+            other_df = pd.DataFrame(summary["other_investments"])
+            st.dataframe(other_df, use_container_width=True, hide_index=True)
+        else:
+            st.caption("No FD/RD/Bond/government scheme holdings for this client.")
 
     except Exception as e:
         st.error(f"Could not load dashboard: {e}")
@@ -193,7 +257,7 @@ with tab_chat:
 
             # Human-in-the-loop: show approve/reject for rebalancing suggestions
             if msg["role"] == "assistant" and msg.get("requires_approval") and not msg.get("approval_decision"):
-                st.warning("This includes a rebalancing suggestion — advisor approval required before acting on it.")
+                st.warning("This includes a rebalancing or trading suggestion — advisor approval required before acting on it.")
                 col_a, col_b = st.columns(2)
                 if col_a.button("✅ Approve", key=f"approve_{i}"):
                     st.session_state.messages[i]["approval_decision"] = "approved"

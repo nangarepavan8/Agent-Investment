@@ -1,5 +1,6 @@
 """
-Tool 2: Risk Score Calculator — Day 3 implementation
+Tool 2: Risk Score Calculator — upgraded to also factor in safe-asset
+allocation (cash, FD, RD, bonds, government schemes).
 
 Simple, explainable scoring (not a real quant model) — deliberately
 transparent so it's easy to explain to judges:
@@ -7,12 +8,18 @@ transparent so it's easy to explain to judges:
     score = sector_concentration_penalty
           + single_position_concentration_penalty
           + risk_profile_bias
+          - safe_asset_discount
 
-Each factor is capped so the total stays within 0-100.
+Each factor is capped so the total stays within 0-100. The safe-asset
+discount reflects a real principle: a client heavily concentrated in
+one stock sector is genuinely less risky overall if they also hold
+substantial FD/RD/bonds/cash elsewhere — risk should be assessed
+across the FULL portfolio, not just the equity slice.
 """
 
 from typing import Dict, Any
-from src.tools.data_loader import get_client_holdings, get_client_info
+from src.tools.data_loader import get_client_holdings, get_client_info, get_client_other_investments
+from src.tools.fixed_income import inr_to_usd
 
 RISK_PROFILE_BIAS = {
     "Conservative": 0,
@@ -24,8 +31,9 @@ RISK_PROFILE_BIAS = {
 def calc_risk_score(client_id: str) -> Dict[str, Any]:
     """
     Calculate a 0-100 risk score for a client's portfolio based on
-    sector concentration, single-position concentration, and the
-    client's stated risk profile.
+    sector concentration, single-position concentration, the client's
+    stated risk profile, and their safe-asset allocation (cash, FD,
+    RD, bonds, government schemes offset stock-only concentration risk).
 
     Args:
         client_id: e.g. "CLIENT_001"
@@ -74,8 +82,30 @@ def calc_risk_score(client_id: str) -> Dict[str, Any]:
     profile_bias = RISK_PROFILE_BIAS.get(client_info["risk_profile"], 10)
     factors.append(f"Client risk profile on file: {client_info['risk_profile']}")
 
-    raw_score = sector_penalty + position_penalty + profile_bias
-    risk_score = min(100, raw_score)
+    # Factor 4: safe-asset allocation (cash + FD/RD/Bonds/govt schemes)
+    # offsets pure stock-concentration risk, assessed across the FULL
+    # portfolio. NOTE: cash/FD/RD/bonds are held in INR while stocks are
+    # in USD (real US tickers) — convert to USD equivalent (fixed demo
+    # rate) before comparing, otherwise rupees get miscounted as dollars.
+    other_df = get_client_other_investments(client_id)
+    safe_assets_inr = float(other_df["principal_amount"].sum()) + float(client_info.get("cash_balance", 0))
+    safe_assets = inr_to_usd(safe_assets_inr)
+    risky_assets = float(total_value)
+    total_assets = safe_assets + risky_assets
+    safe_ratio_pct = (safe_assets / total_assets * 100) if total_assets else 0
+
+    if safe_ratio_pct >= 50:
+        safe_asset_discount = 15
+        factors.append(f"Substantial safe-asset allocation ({safe_ratio_pct:.0f}% in cash/FD/RD/bonds/govt schemes) reduces overall risk")
+    elif safe_ratio_pct >= 25:
+        safe_asset_discount = 8
+        factors.append(f"Moderate safe-asset allocation ({safe_ratio_pct:.0f}% in cash/FD/RD/bonds/govt schemes)")
+    else:
+        safe_asset_discount = 0
+        factors.append(f"Low safe-asset allocation ({safe_ratio_pct:.0f}% in cash/FD/RD/bonds/govt schemes) — most holdings are market-exposed")
+
+    raw_score = sector_penalty + position_penalty + profile_bias - safe_asset_discount
+    risk_score = max(0, min(100, raw_score))
 
     if risk_score >= 60:
         risk_level = "High"
@@ -96,3 +126,4 @@ def calc_risk_score(client_id: str) -> Dict[str, Any]:
 if __name__ == "__main__":
     import json
     print(json.dumps(calc_risk_score("CLIENT_001"), indent=2))
+    print(json.dumps(calc_risk_score("CLIENT_003"), indent=2))

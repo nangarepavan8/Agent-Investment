@@ -407,6 +407,169 @@ API server alone is still a valid, demonstrable "automation-ready"
 component — you can explain the integration point exists and show the
 working endpoint, without needing a live N8N instance in the room.
 
+## Stretch Features, Round 4: Real-Time Market Valuation & Gain/Loss
+
+**The gap this fixes:** Previously, "portfolio value" was calculated at
+**purchase price** (cost basis) — meaning the assistant couldn't
+correctly answer arguably the most important investing questions:
+*"What's this worth right now?"* and *"Is this client up or down?"*
+
+**What changed:** `get_portfolio_summary()` now fetches **live current
+prices** per holding via yfinance and returns:
+- `total_value` — current market value (not cost basis)
+- `total_cost_basis` — what was originally paid
+- `total_gain_loss` / `total_gain_loss_pct` — unrealized gain/loss
+- Per-holding `current_value`, `gain_loss`, `gain_loss_pct`, and a
+  `price_is_live` flag
+
+**Graceful degradation:** if a live price can't be fetched for a
+symbol (rate limit, network issue), that holding falls back to its
+purchase price and is flagged `price_is_live: False`, with a visible
+note — the whole tool never crashes just because one price lookup fails.
+
+**Dashboard tab** now shows a dedicated "Unrealized Gain/Loss" metric
+alongside the existing value/risk/holdings metrics.
+
+**New questions this unlocks:**
+- "What's this portfolio worth right now?"
+- "Is this client up or down overall?"
+- "Which holdings are performing best/worst?" (visible per-holding in
+  the dashboard table)
+
+Test it:
+```bash
+python -m src.tools.portfolio_summary
+streamlit run app.py   # check Dashboard tab's new Gain/Loss metric
+```
+
+## Stretch Features, Round 5: Open-Ended Investment Questions
+
+This round makes the assistant answer genuinely open-ended stock
+questions, not just questions about the 10 synthetic clients — while
+staying responsible about what an AI agent should and shouldn't claim.
+
+**1. Enhanced Market Context (`src/tools/market_context.py`)**
+
+Now returns fundamentals (P/E ratio, market cap), analyst recommendation
+and target price, and recent news — not just price. **Also
+auto-detects Indian tickers**: asking about "TCS" or "INFY" without a
+suffix automatically tries `.NS` (NSE) and `.BO` (BSE) until one
+resolves, so you don't need to know the exact suffix.
+
+**2. Profit-Booking / Tax-Loss Harvesting Tool (`src/tools/profit_booking.py`)**
+
+A genuinely answerable version of "which stocks should I sell" — uses
+your real-time gain/loss data (Round 4) to flag holdings up ≥20% as
+profit-booking candidates, and holdings down ≤15% as tax-loss
+harvesting candidates. Rule-based and explainable, same philosophy as
+the risk score and rebalancing tools. Like rebalancing, this now
+requires advisor approval before being treated as actioned.
+
+**3. Responsible-investing guardrails (baked into the agent's instructions)**
+
+For questions like *"shall I invest in TCS?"* or *"what will AAPL's
+future be?"*, the agent is explicitly instructed to:
+- Present factual data (price, fundamentals, analyst view, sentiment) —
+  **not** a confident "yes, buy it" recommendation
+- **Never predict future prices** — explain current trend/fundamentals
+  instead, and say plainly that future performance can't be reliably
+  predicted
+- For profit-booking questions, present the rule-based tool's findings
+  directly, since that IS a legitimate, answerable calculation
+
+This mirrors how real financial tools and licensed advisors operate,
+and is a genuinely good talking point on responsible AI design if a
+judge asks about it.
+
+Try these in the chat:
+- *"Should I invest in TCS?"* — tests Indian ticker resolution + balanced, non-prescriptive answer
+- *"What's the outlook for AAPL?"* — tests fundamentals + sentiment synthesis, no price prediction
+- *"Which stocks should I book profit on?"* — tests the new rule-based tool + approval gate
+
+## Stretch Features, Round 6: General Finance Q&A Fallback
+
+**The gap this fixes:** Previously, the system prompt told the agent
+to "always use a tool" for any question, which could make it awkward
+or reluctant on general finance/investing questions that don't
+involve a specific client or live stock data — e.g. "what is
+diversification?", "how does compound interest work?", "what's a
+P/E ratio?" These are exactly the kind of questions a knowledgeable
+assistant (or "normal GPT") should just answer directly.
+
+**What changed:** The system prompt now explicitly distinguishes:
+- Questions about a **specific client or stock** → use the appropriate
+  tool, never guess at real numbers
+- **General finance/investing education questions** → answer directly
+  from the model's own knowledge, no tool call needed
+
+**New sidebar category** — "Try asking — General Finance" — with
+examples like "What is diversification?" and "What's the difference
+between a mutual fund and an ETF?"
+
+**Eval harness updated:** added a case verifying general-knowledge
+questions correctly trigger **zero** tool calls (not just "at least
+the expected tool," which is what the other cases check — this one
+specifically checks the agent didn't unnecessarily call something).
+
+Test it:
+```bash
+streamlit run app.py
+```
+Ask "What is diversification?" and confirm you get a direct,
+knowledgeable answer with no "🔧 tool call" happening — check the
+"🧠 Agent's reasoning" expander shows no tool calls for this one.
+
+## Stretch Features, Round 7: Expanded Client Data & Multi-Asset Portfolios
+
+Significantly richer synthetic dataset and portfolio logic:
+
+**Richer client profiles** (`data/clients.csv`): age, investment goal
+(Retirement/Wealth Growth/Child Education/Home Purchase/Regular
+Income), time horizon, income bracket, and cash balance — not just
+name and risk profile.
+
+**Purchase dates on every stock holding** (`data/holdings.csv`) —
+enables "when did I buy this" style questions and more realistic
+holding-period context.
+
+**New asset classes** (`data/other_investments.csv`): each client now
+may hold Fixed Deposits, Recurring Deposits, Corporate Bonds, PPF,
+NSC, and/or Sovereign Gold Bonds — valued using real compound-interest
+and RD-maturity formulas in `src/tools/fixed_income.py` (simplified
+for explainability, same philosophy as the risk score and rebalancing
+logic — not actuarially precise, but transparent and correct in shape).
+
+**A real currency bug was found and fixed during testing:** stocks are
+priced in USD (real US tickers via yfinance) while cash/FD/RD/bonds
+are denominated in INR. Early testing showed rupee amounts being
+miscounted as if they were dollars in the grand total — an ~83x
+overvaluation. Fixed with an explicit, documented conversion (`src/tools/fixed_income.py: inr_to_usd()`, fixed demo rate of 1 USD = 83 INR) applied consistently in both `portfolio_summary.py` and `risk_score.py`.
+
+**`get_portfolio_summary()` now returns**, in addition to stocks:
+- `other_investments` — each FD/RD/Bond/scheme with current value, gain/loss, maturity status
+- `cash_balance_inr` — uninvested cash
+- `asset_allocation` — Stocks/FD/RD/Bonds/schemes/Cash as % of total (currency-normalized)
+- `age`, `investment_goal`, `time_horizon` — client profile context
+
+**`calc_risk_score()` now includes a 4th factor**: safe-asset
+allocation (cash + FD/RD/bonds/schemes) offsets pure stock-concentration
+risk — a client heavily concentrated in one sector is genuinely less
+risky if they also hold substantial safe assets elsewhere.
+
+**Dashboard tab** now shows client profile (age/goal/horizon), cash
+balance, an asset-allocation chart (all asset classes) alongside the
+existing sector-allocation chart (stocks only), and a separate table
+for FD/RD/Bond/government-scheme holdings.
+
+Test it:
+```bash
+python data/generate_data.py          # regenerate the expanded dataset
+python -m src.tools.fixed_income      # test FD/RD valuation math directly
+python -m src.tools.portfolio_summary # full multi-asset summary for CLIENT_003
+python -m src.tools.risk_score        # risk score with safe-asset factor
+streamlit run app.py                  # see it all in the Dashboard tab
+```
+
 ## Roadmap
 
 | Day | Milestone |
@@ -424,5 +587,9 @@ working endpoint, without needing a live N8N instance in the room.
 | Stretch | Reasoning trace + human-in-the-loop approval ✅ |
 | Stretch 2 | Proactive monitoring + sentiment-aware market context ✅ |
 | Stretch 3 | Audit trail + evaluation harness + N8N automation endpoint ✅ |
+| Stretch 4 | Real-time market valuation + gain/loss ✅ |
+| Stretch 5 | Open-ended investment Q&A + profit-booking tool ✅ |
+| Stretch 6 | General finance Q&A fallback ✅ |
+| Stretch 7 | Expanded client data + multi-asset portfolios (FD/RD/Bonds/schemes) ✅ |
 
 🎉 **Build complete.** See `DEMO_SCRIPT.md` for your presentation guide.

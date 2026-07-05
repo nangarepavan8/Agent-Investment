@@ -1,11 +1,11 @@
-client_id,name,risk_profile
-CLIENT_001,Rohan Sharma,Aggressive
-CLIENT_002,Priya Reddy,Conservative
-CLIENT_003,Meera Verma,Aggressive
-CLIENT_004,Neha Verma,Aggressive
-CLIENT_005,Sneha Sharma,Conservative
-CLIENT_006,Rohan Reddy,Conservative
-CLIENT_007,Neha Menon,Conservative
-CLIENT_008,Neha Reddy,Aggressive
-CLIENT_009,Neha Gupta,Conservative
-CLIENT_010,Vikram Menon,Moderate
+client_id,name,risk_profile,age,investment_goal,time_horizon,income_bracket,cash_balance
+CLIENT_001,Rohan Sharma,Aggressive,45,Wealth Growth,Short-term (<3 yrs),₹10-25 LPA,602353.41
+CLIENT_002,Neha Verma,Aggressive,55,Retirement,Short-term (<3 yrs),₹5-10 LPA,213978.48
+CLIENT_003,Neha Menon,Conservative,63,Wealth Growth,Long-term (>7 yrs),₹50+ LPA,215330.47
+CLIENT_004,Farhan Kapoor,Conservative,38,Home Purchase,Medium-term (3-7 yrs),₹25-50 LPA,166609.62
+CLIENT_005,Arjun Verma,Conservative,52,Retirement,Medium-term (3-7 yrs),₹25-50 LPA,502794.52
+CLIENT_006,Aditi Rao,Aggressive,35,Home Purchase,Short-term (<3 yrs),₹25-50 LPA,672053.5
+CLIENT_007,Farhan Nair,Aggressive,40,Retirement,Short-term (<3 yrs),₹10-25 LPA,629801.26
+CLIENT_008,Rohan Reddy,Conservative,52,Child Education,Medium-term (3-7 yrs),₹25-50 LPA,171990.57
+CLIENT_009,Arjun Reddy,Aggressive,45,Retirement,Long-term (>7 yrs),₹10-25 LPA,450604.91
+CLIENT_010,Karan Iyer,Moderate,52,Child Education,Long-term (>7 yrs),₹10-25 LPA,563460.69

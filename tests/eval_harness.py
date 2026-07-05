@@ -42,6 +42,11 @@ EVAL_CASES = [
     ("CLIENT_006", "Is this client's portfolio well diversified?", ["risk_score_tool"]),
     ("CLIENT_007", "What sectors is this client invested in?", ["portfolio_summary_tool"]),
     ("CLIENT_001", "Should we reduce exposure to any sector?", ["rebalancing_tool"]),
+    ("CLIENT_002", "What's this portfolio worth right now?", ["portfolio_summary_tool"]),
+    ("CLIENT_003", "Is this client up or down overall?", ["portfolio_summary_tool"]),
+    ("CLIENT_001", "Which stocks should I book profit on?", ["profit_booking_tool"]),
+    (None, "Should I invest in TCS?", ["market_context_tool"]),
+    (None, "What is diversification?", []),
 ]
 
 
@@ -54,7 +59,13 @@ def run_evaluation():
             actual_tools = set(tc["name"] for tc in result["tool_calls"])
             expected_set = set(expected_tools)
 
-            passed = expected_set.issubset(actual_tools)
+            if expected_set:
+                # Normal case: agent must call at least the expected tool(s)
+                passed = expected_set.issubset(actual_tools)
+            else:
+                # Special case: expecting NO tool calls (general knowledge
+                # question) - passes only if the agent called nothing
+                passed = len(actual_tools) == 0
             results.append({
                 "query": query,
                 "client_id": client_id,

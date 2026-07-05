@@ -42,6 +42,8 @@ Then pick one flagged client (e.g. CLIENT_001) and switch to Chat for this seque
 
 On any answer, click **"🧠 Agent's reasoning"** at least once during the demo to show the tool-call trace — this makes the routing decision visible rather than a black box, which judges specifically respond well to.
 
+**Bonus moment — responsible AI design:** ask *"Should I invest in TCS?"* and note out loud that the agent gives factual data (price, fundamentals, analyst view) rather than a confident "yes/no" — and won't predict future prices if asked. This is a deliberate design choice worth calling out explicitly; it mirrors how real financial advisors and tools operate, and shows judges you thought about responsible AI behavior, not just capability.
+
 While it's "thinking," narrate what's happening rather than sitting in silence:
 > "It's deciding which tool applies right now, then it'll pull the real numbers from the synthetic dataset."
 

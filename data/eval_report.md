@@ -1,8 +1,8 @@
 # Agent Evaluation Report
 
-Generated: 2026-07-05T12:51:17
+Generated: 2026-07-05T15:03:14
 
-**Score: 8/10 passed (80.0%)**
+**Score: 13/15 passed (86.7%)**
 
 | Query | Client | Expected Tool(s) | Actual Tool(s) | Result |
 |---|---|---|---|---|
@@ -14,5 +14,10 @@ Generated: 2026-07-05T12:51:17
 | Give me a risk assessment and rebalancing plan | CLIENT_004 | rebalancing_tool, risk_score_tool | rebalancing_tool, risk_score_tool | ✅ Pass |
 | What's the portfolio summary and risk score? | CLIENT_005 | portfolio_summary_tool, risk_score_tool | portfolio_summary_tool, risk_score_tool | ✅ Pass |
 | Is this client's portfolio well diversified? | CLIENT_006 | risk_score_tool | portfolio_summary_tool | ❌ Fail |
-| What sectors is this client invested in? | CLIENT_007 | portfolio_summary_tool | portfolio_summary_tool | ✅ Pass |
-| Should we reduce exposure to any sector? | CLIENT_001 | rebalancing_tool | portfolio_summary_tool, risk_score_tool | ❌ Fail |
+| What sectors is this client invested in? | CLIENT_007 | portfolio_summary_tool |  | ❌ Fail |
+| Should we reduce exposure to any sector? | CLIENT_001 | rebalancing_tool | rebalancing_tool, risk_score_tool | ✅ Pass |
+| What's this portfolio worth right now? | CLIENT_002 | portfolio_summary_tool | portfolio_summary_tool | ✅ Pass |
+| Is this client up or down overall? | CLIENT_003 | portfolio_summary_tool | portfolio_summary_tool | ✅ Pass |
+| Which stocks should I book profit on? | CLIENT_001 | profit_booking_tool | profit_booking_tool | ✅ Pass |
+| Should I invest in TCS? | — | market_context_tool | market_context_tool | ✅ Pass |
+| What is diversification? | — |  |  | ✅ Pass |

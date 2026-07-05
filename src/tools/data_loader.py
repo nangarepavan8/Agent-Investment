@@ -17,6 +17,16 @@ def load_holdings() -> pd.DataFrame:
     return pd.read_csv(os.path.join(DATA_DIR, "holdings.csv"))
 
 
+def load_other_investments() -> pd.DataFrame:
+    return pd.read_csv(os.path.join(DATA_DIR, "other_investments.csv"))
+
+
+def get_client_other_investments(client_id: str) -> pd.DataFrame:
+    """Return a client's FD/RD/Bond/government-scheme holdings (may be empty)."""
+    other = load_other_investments()
+    return other[other["client_id"] == client_id]
+
+
 def get_client_holdings(client_id: str) -> pd.DataFrame:
     """Return only the holdings rows belonging to one client."""
     holdings = load_holdings()
