@@ -10,6 +10,7 @@ Run with:
 
 import streamlit as st
 import pandas as pd
+import plotly.graph_objects as go
 
 from src.agent import run_agent
 from src.tools.data_loader import load_clients
@@ -39,32 +40,42 @@ selected_label = st.sidebar.selectbox("Choose a client", list(client_options.key
 selected_client_id = client_options[selected_label]
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("**Try asking — Your Portfolio:**")
-st.sidebar.markdown("""
-- What's this portfolio worth right now?
-- Is this client up or down overall?
-- How risky is this portfolio?
-- How should we rebalance it?
-- Which stocks should I book profit on?
-""")
 
-st.sidebar.markdown("**Try asking — Stock Research:**")
-st.sidebar.markdown("""
-- Should I invest in TCS?
-- What's the outlook on AAPL?
-- What will Infosys's future be?
-- What's the sentiment on MSFT right now?
-- Is Reliance a good buy?
-""")
+EXAMPLE_QUESTIONS = {
+    "Your Portfolio": [
+        "What's this portfolio worth right now?",
+        "Is this client up or down overall?",
+        "How risky is this portfolio?",
+        "How should we rebalance it?",
+        "Which stocks should I book profit on?",
+    ],
+    "Stock Research": [
+        "Should I invest in TCS?",
+        "What's the outlook on AAPL?",
+        "What will Infosys's future be?",
+        "What's the sentiment on MSFT right now?",
+        "Is Reliance a good buy?",
+    ],
+    "General Finance": [
+        "What is diversification?",
+        "How does compound interest work?",
+        "What's the difference between a mutual fund and an ETF?",
+        "What is a P/E ratio?",
+        "What's the difference between stocks and bonds?",
+    ],
+}
 
-st.sidebar.markdown("**Try asking — General Finance:**")
-st.sidebar.markdown("""
-- What is diversification?
-- How does compound interest work?
-- What's the difference between a mutual fund and an ETF?
-- What is a P/E ratio?
-- What's the difference between stocks and bonds?
-""")
+if "pending_query" not in st.session_state:
+    st.session_state.pending_query = None
+
+for category, questions in EXAMPLE_QUESTIONS.items():
+    with st.sidebar.expander(f"💡 Try asking — {category}", expanded=False):
+        for q in questions:
+            if st.button(q, key=f"suggest_{q}", use_container_width=True):
+                st.session_state.pending_query = q
+                st.rerun()
+
+st.sidebar.caption("Click a question above to send it directly — switch to the 💬 Chat tab to see the answer.")
 
 if st.sidebar.button("🗑️ Clear conversation"):
     st.session_state.messages = []
@@ -159,21 +170,35 @@ with tab_dashboard:
 
         chart_col, factors_col = st.columns([2, 1])
 
+        DONUT_COLORS = ["#5B2EDB", "#E8348B", "#F5A623", "#2ECC71", "#3498DB", "#E74C3C", "#95A5A6"]
+
+        def render_donut(data_dict, title):
+            if not data_dict:
+                st.caption(f"No data available for {title.lower()}.")
+                return
+            labels = list(data_dict.keys())
+            values = list(data_dict.values())
+            fig = go.Figure(data=[go.Pie(
+                labels=labels,
+                values=values,
+                hole=0.55,
+                marker=dict(colors=DONUT_COLORS, line=dict(color="#FFFFFF", width=2)),
+                textinfo="label+percent",
+                textposition="outside",
+            )])
+            fig.update_layout(
+                showlegend=False,
+                margin=dict(t=10, b=10, l=10, r=10),
+                height=320,
+            )
+            st.plotly_chart(fig, use_container_width=True, key=f"donut_{title}")
+
         with chart_col:
             st.subheader("Asset Allocation (All Asset Classes)")
-            if summary["asset_allocation"]:
-                asset_df = pd.DataFrame(
-                    list(summary["asset_allocation"].items()),
-                    columns=["Asset Class", "Allocation %"],
-                ).set_index("Asset Class")
-                st.bar_chart(asset_df)
+            render_donut(summary["asset_allocation"], "Asset Allocation")
 
             st.subheader("Sector Allocation (Within Stocks)")
-            allocation_df = pd.DataFrame(
-                list(summary["sector_allocation"].items()),
-                columns=["Sector", "Allocation %"],
-            ).set_index("Sector")
-            st.bar_chart(allocation_df)
+            render_donut(summary["sector_allocation"], "Sector Allocation")
 
         with factors_col:
             st.subheader("Risk Factors")
@@ -272,7 +297,12 @@ with tab_chat:
             elif msg.get("approval_decision") == "rejected":
                 st.error("❌ Rebalancing suggestion rejected by advisor.")
 
-    user_input = st.chat_input("Ask about this client's portfolio, risk, or a stock...")
+    chat_box_input = st.chat_input("Ask about this client's portfolio, risk, or a stock...")
+
+    # A sidebar suggestion button click sets pending_query; treat it exactly
+    # like typed input, then clear it so it doesn't resend on every rerun
+    user_input = chat_box_input or st.session_state.pending_query
+    st.session_state.pending_query = None
 
     if user_input:
         st.session_state.messages.append({"role": "user", "content": user_input})

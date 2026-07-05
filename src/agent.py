@@ -1,10 +1,4 @@
-import sys
-import asyncio
-
-if sys.platform == "win32":
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    
-    """
+"""
 DAY 4: The Agentic Core
 
 Wraps the 4 existing tool functions as LangChain @tool-decorated

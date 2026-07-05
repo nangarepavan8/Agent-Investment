@@ -570,6 +570,35 @@ python -m src.tools.risk_score        # risk score with safe-asset factor
 streamlit run app.py                  # see it all in the Dashboard tab
 ```
 
+## Stretch Features, Round 8: Visual Polish
+
+Two demo-facing UX improvements — no new backend logic, just makes the
+existing app feel more polished and faster to demo live:
+
+**1. Clickable suggested questions**
+
+Sidebar example questions are now organized into collapsible
+categories (Your Portfolio / Stock Research / General Finance) as
+actual buttons, not static text. Clicking one sends it straight to
+the agent — no typing needed during a live demo, no risk of a typo
+mid-presentation. Switch to the **💬 Chat** tab to see the response
+after clicking.
+
+**2. Donut charts instead of bar charts**
+
+Asset allocation and sector allocation now render as polished donut
+charts (via Plotly) instead of plain bar charts — same data, more
+visually engaging, reads faster at a glance. Colors match the app's
+purple/pink/orange theme.
+
+Test it:
+```bash
+pip install -r requirements.txt   # picks up plotly
+streamlit run app.py
+```
+Click a sidebar suggestion button, then check the Chat tab for the
+response. Open the Dashboard tab to see the new donut charts.
+
 ## Roadmap
 
 | Day | Milestone |
@@ -591,5 +620,6 @@ streamlit run app.py                  # see it all in the Dashboard tab
 | Stretch 5 | Open-ended investment Q&A + profit-booking tool ✅ |
 | Stretch 6 | General finance Q&A fallback ✅ |
 | Stretch 7 | Expanded client data + multi-asset portfolios (FD/RD/Bonds/schemes) ✅ |
+| Stretch 8 | Visual polish: clickable questions + donut charts ✅ |
 
 🎉 **Build complete.** See `DEMO_SCRIPT.md` for your presentation guide.

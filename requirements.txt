@@ -8,3 +8,4 @@ python-dotenv>=1.0.0
 pandas>=2.2.0
 fastapi>=0.110.0
 uvicorn>=0.29.0
+plotly>=5.20.0
