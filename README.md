@@ -793,6 +793,44 @@ python -m src.monitoring           # check suggested_action appears
 streamlit run app.py
 ```
 
+## Stretch Features, Round 13: Real Calendar Years + Chart Flexibility
+
+**The "future prediction" ask came up again** ("stocks that will
+perform best in upcoming years") — declined for the same reason as
+every time before: no one can reliably know that. Everything below is
+the honest, still-useful version of what was actually asked for.
+
+**1. Real calendar years, not generic labels** — Historical
+Performance Lookback now shows actual years (e.g. "2025", "2024",
+"2023" if today is 2026) instead of "1 year/2 year/3 year". The
+Hypothetical Growth Illustrator now shows real future years (e.g.
+"2027", "2028") instead of "Year 1/Year 2". Verified the year-labeling
+math directly: today's date correctly produces 2025/2024/2023 for a
+1/2/3-year lookback.
+
+**2. Monthly/weekly/daily granularity** (`get_price_history_series()`
+in `historical_performance.py`) — a NEW real price history line chart
+where you pick Daily (3 months), Weekly (1 year), or Monthly (3 years)
+and see the actual historical closing price at that zoom level — real
+yfinance data, not the discrete 1/2/3-year snapshot.
+
+**3. Bar/Line chart toggle** — added to Historical Performance and the
+Growth Illustrator, so you can view the same real data either way.
+
+**4. Bar/Pie chart toggle** — added to Sector Comparison. Since
+sector comparison is a same-day snapshot (not a time series), pie
+shows relative magnitude of today's move per sector, still colored
+green/red by direction.
+
+Test it:
+```bash
+python -m src.tools.historical_performance
+streamlit run app.py
+```
+Open "For Investors," generate guidance, then try the Historical
+Performance section (switch Bar/Line, try Daily/Weekly/Monthly price
+history) and the Growth Illustrator (real future years, Bar/Line).
+
 ## Roadmap
 
 | Day | Milestone |
@@ -819,5 +857,6 @@ streamlit run app.py
 | Stretch 10 | Real Indian tickers + sector data + "For Investors" self-service tab ✅ |
 | Stretch 11 | Stock screener (real data, no predictions) + investor chat ✅ |
 | Stretch 12 | Screener depth (reasons, sectors, chat), growth illustrator, data-driven alerts, dashboard fix ✅ |
+| Stretch 13 | Real calendar years + monthly/weekly granularity + bar/line/pie chart toggles ✅ |
 
 🎉 **Build complete.** See `DEMO_SCRIPT.md` for your presentation guide.

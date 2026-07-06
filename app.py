@@ -19,7 +19,7 @@ from src.tools.risk_score import calc_risk_score
 from src.monitoring import scan_all_clients
 from src.audit_log import log_event, load_audit_log
 from src.tools.investor_guidance import get_investment_guidance, VALID_GOALS, VALID_HORIZONS
-from src.tools.historical_performance import get_historical_returns
+from src.tools.historical_performance import get_historical_returns, get_price_history_series
 from src.tools.sector_performance import get_sector_performance, NIFTY_SECTOR_INDICES
 from src.tools.stock_screener import get_stock_screener, SYMBOL_TO_SECTOR
 from src.tools.growth_illustrator import get_hypothetical_growth
@@ -451,11 +451,13 @@ with tab_investor:
         st.markdown("---")
         st.markdown("### Historical Performance Lookback (Real Data)")
         st.caption(
-            "Past performance over 1/2/3 years — shown as-is, NOT a forecast of future returns."
+            "Past performance by real calendar year — shown as-is, NOT a forecast of future returns."
         )
 
         example_tickers = ["TCS.NS", "INFY.NS", "RELIANCE.NS", "HDFCBANK.NS", "TATAMOTORS.NS", "SUNPHARMA.NS"]
-        selected_ticker = st.selectbox("Choose a stock to view its historical performance", example_tickers)
+        hist_col1, hist_col2 = st.columns([2, 1])
+        selected_ticker = hist_col1.selectbox("Choose a stock to view its historical performance", example_tickers)
+        hist_chart_type = hist_col2.radio("Chart type", ["Bar", "Line"], horizontal=True, key="hist_chart_type")
 
         if st.button("Show Historical Performance"):
             with st.spinner("Fetching real historical data..."):
@@ -464,32 +466,68 @@ with tab_investor:
             if "error" in hist_result:
                 st.warning(f"⚠️ {hist_result['error']}")
             else:
-                st.caption(f"Current price: ₹{hist_result['current_price']:,.2f}")
-                bar_labels = []
-                bar_values = []
-                bar_colors = []
-                for period_label, period_data in hist_result["returns"].items():
-                    bar_labels.append(period_label.replace("_", " ").title())
-                    bar_values.append(period_data["return_pct"])
-                    bar_colors.append("#2ECC71" if period_data["is_positive"] else "#E74C3C")
+                st.caption(f"Current price: ₹{hist_result['current_price']:,.2f} (as of {hist_result['as_of_date']})")
+                # Sort so years appear oldest-to-newest, left-to-right
+                sorted_years = sorted(hist_result["returns"].keys())
+                bar_labels = sorted_years
+                bar_values = [hist_result["returns"][y]["return_pct"] for y in sorted_years]
+                bar_colors = ["#2ECC71" if hist_result["returns"][y]["is_positive"] else "#E74C3C" for y in sorted_years]
 
-                bar_fig = go.Figure(data=[go.Bar(
-                    x=bar_labels, y=bar_values,
-                    marker=dict(color=bar_colors),
-                    text=[f"{v:+.1f}%" for v in bar_values],
-                    textposition="outside",
-                )])
-                bar_fig.update_layout(
-                    yaxis_title="Return %",
+                if hist_chart_type == "Bar":
+                    hist_fig = go.Figure(data=[go.Bar(
+                        x=bar_labels, y=bar_values,
+                        marker=dict(color=bar_colors),
+                        text=[f"{v:+.1f}%" for v in bar_values],
+                        textposition="outside",
+                    )])
+                else:
+                    hist_fig = go.Figure(data=[go.Scatter(
+                        x=bar_labels, y=bar_values, mode="lines+markers+text",
+                        line=dict(color="#5B2EDB", width=3),
+                        marker=dict(size=10, color=bar_colors),
+                        text=[f"{v:+.1f}%" for v in bar_values],
+                        textposition="top center",
+                    )])
+                hist_fig.update_layout(
+                    xaxis_title="Year", yaxis_title="Return %",
                     margin=dict(t=20, b=20, l=20, r=20),
                     height=320,
                 )
-                st.plotly_chart(bar_fig, use_container_width=True, key="historical_return_bar")
+                st.plotly_chart(hist_fig, use_container_width=True, key="historical_return_chart")
+
+        # --- Flexible granularity price history (daily/weekly/monthly line chart) ---
+        st.markdown("**Price History — Choose Your Own Zoom Level**")
+        granularity = st.radio(
+            "Granularity", ["Daily", "Weekly", "Monthly"], horizontal=True, key="price_history_granularity"
+        )
+        if st.button("Show Price History"):
+            with st.spinner(f"Fetching real {granularity.lower()} price history..."):
+                series_result = get_price_history_series(selected_ticker, granularity)
+
+            if "error" in series_result:
+                st.warning(f"⚠️ {series_result['error']}")
+            else:
+                price_fig = go.Figure(data=[go.Scatter(
+                    x=series_result["dates"], y=series_result["prices"],
+                    mode="lines", line=dict(color="#3498DB", width=2), fill="tozeroy",
+                    fillcolor="rgba(52, 152, 219, 0.1)",
+                )])
+                price_fig.update_layout(
+                    xaxis_title="Date", yaxis_title="Price (₹)",
+                    margin=dict(t=20, b=20, l=20, r=20),
+                    height=320,
+                )
+                st.plotly_chart(price_fig, use_container_width=True, key="price_history_line")
+                st.caption(f"{granularity} closing price, {series_result['dates'][0]} to {series_result['dates'][-1]} — real historical data.")
 
         # --- Sector comparison (real data, today's performance) ---
         st.markdown("---")
         st.markdown("### Sector Comparison (Today's Real Performance)")
         st.caption("Compare how different sectors are performing today — helps spot where the current momentum is.")
+
+        sector_chart_type = st.radio(
+            "Chart type", ["Bar", "Pie (by magnitude of movement)"], horizontal=True, key="sector_chart_type"
+        )
 
         if st.button("Compare Sectors"):
             with st.spinner("Fetching real sector index data..."):
@@ -500,18 +538,33 @@ with tab_investor:
             else:
                 perf = sector_result["sector_performance_pct"]
                 sector_colors = ["#2ECC71" if v >= 0 else "#E74C3C" for v in perf.values()]
-                sector_fig = go.Figure(data=[go.Bar(
-                    x=list(perf.keys()), y=list(perf.values()),
-                    marker=dict(color=sector_colors),
-                    text=[f"{v:+.2f}%" for v in perf.values()],
-                    textposition="outside",
-                )])
-                sector_fig.update_layout(
-                    yaxis_title="Today's Change %",
-                    margin=dict(t=20, b=20, l=20, r=20),
-                    height=320,
-                )
-                st.plotly_chart(sector_fig, use_container_width=True, key="sector_comparison_bar")
+
+                if sector_chart_type == "Bar":
+                    sector_fig = go.Figure(data=[go.Bar(
+                        x=list(perf.keys()), y=list(perf.values()),
+                        marker=dict(color=sector_colors),
+                        text=[f"{v:+.2f}%" for v in perf.values()],
+                        textposition="outside",
+                    )])
+                    sector_fig.update_layout(
+                        yaxis_title="Today's Change %",
+                        margin=dict(t=20, b=20, l=20, r=20),
+                        height=320,
+                    )
+                else:
+                    # Pie sizes by magnitude of movement (abs value); color still
+                    # reflects direction (green=up, red=down) via marker colors
+                    sector_fig = go.Figure(data=[go.Pie(
+                        labels=[f"{k} ({v:+.2f}%)" for k, v in perf.items()],
+                        values=[abs(v) for v in perf.values()],
+                        hole=0.5,
+                        marker=dict(colors=sector_colors, line=dict(color="#FFFFFF", width=2)),
+                        textinfo="label",
+                    )])
+                    sector_fig.update_layout(showlegend=False, margin=dict(t=20, b=20, l=20, r=20), height=380)
+                    st.caption("Slice size = magnitude of today's move; green = up, red = down.")
+
+                st.plotly_chart(sector_fig, use_container_width=True, key="sector_comparison_chart")
 
                 if "best_performing_sector" in sector_result:
                     best = sector_result["best_performing_sector"]
@@ -688,13 +741,14 @@ with tab_screener:
             "is not indicative of future returns."
         )
 
-        illus_col1, illus_col2, illus_col3 = st.columns(3)
+        illus_col1, illus_col2, illus_col3, illus_col4 = st.columns(4)
         illus_symbol = illus_col1.selectbox(
             "Stock", ["TCS.NS", "INFY.NS", "RELIANCE.NS", "HDFCBANK.NS", "TATAMOTORS.NS", "SUNPHARMA.NS"],
             key="illustrator_symbol",
         )
         illus_amount = illus_col2.number_input("Hypothetical amount (₹)", min_value=1000, value=100000, step=1000)
         illus_years = illus_col3.slider("Years", min_value=1, max_value=4, value=4)
+        illus_chart_type = illus_col4.radio("Chart type", ["Bar", "Line"], horizontal=True, key="illus_chart_type")
 
         if st.button("Show Hypothetical Illustration"):
             with st.spinner("Calculating from real historical data..."):
@@ -708,19 +762,28 @@ with tab_screener:
                     f"{growth_result['avg_annual_return_pct']:+.2f}%/year"
                 )
 
-                years_list = list(growth_result["yearly_projection"].keys())
-                values_list = list(growth_result["yearly_projection"].values())
+                # Keys are already real future calendar years (e.g. "2027") — sorted for display
+                years_list = sorted(growth_result["yearly_projection"].keys())
+                values_list = [growth_result["yearly_projection"][y] for y in years_list]
                 bar_color = "#2ECC71" if growth_result["avg_annual_return_pct"] >= 0 else "#E74C3C"
 
-                growth_fig = go.Figure(data=[go.Bar(
-                    x=[y.replace("_", " ").title() for y in years_list],
-                    y=values_list,
-                    marker=dict(color=bar_color),
-                    text=[f"₹{v:,.0f}" for v in values_list],
-                    textposition="outside",
-                )])
+                if illus_chart_type == "Bar":
+                    growth_fig = go.Figure(data=[go.Bar(
+                        x=years_list, y=values_list,
+                        marker=dict(color=bar_color),
+                        text=[f"₹{v:,.0f}" for v in values_list],
+                        textposition="outside",
+                    )])
+                else:
+                    growth_fig = go.Figure(data=[go.Scatter(
+                        x=years_list, y=values_list, mode="lines+markers+text",
+                        line=dict(color=bar_color, width=3),
+                        marker=dict(size=10),
+                        text=[f"₹{v:,.0f}" for v in values_list],
+                        textposition="top center",
+                    )])
                 growth_fig.update_layout(
-                    yaxis_title="Hypothetical Value (₹)",
+                    xaxis_title="Year", yaxis_title="Hypothetical Value (₹)",
                     margin=dict(t=20, b=20, l=20, r=20),
                     height=320,
                 )

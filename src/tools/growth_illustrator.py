@@ -13,6 +13,7 @@ an average annual return, then projects a hypothetical compound growth
 curve — mathematically transparent, not a black-box forecast.
 """
 
+from datetime import date
 from typing import Dict, Any
 from src.tools.historical_performance import get_historical_returns
 
@@ -29,8 +30,8 @@ def get_hypothetical_growth(symbol: str, investment_amount: float, years: int = 
 
     Returns:
         dict with symbol, avg_annual_return_pct (from real historical
-        data), yearly_projection (hypothetical value per year),
-        disclaimer
+        data), yearly_projection keyed by REAL future calendar years
+        (e.g. "2027", "2028"), disclaimer
     """
     years = min(max(years, 1), 4)
 
@@ -39,22 +40,25 @@ def get_hypothetical_growth(symbol: str, investment_amount: float, years: int = 
         return {"symbol": symbol, "error": historical["error"]}
 
     # Average the available historical annualized returns as the
-    # illustrative growth rate (simple average of 1/2/3-year figures,
-    # each annualized)
+    # illustrative growth rate (simple average across the returned
+    # calendar-year lookback windows, each annualized to its own span)
     returns = historical["returns"]
     annualized_rates = []
-    for period_key, period_years in [("1_year", 1), ("2_year", 2), ("3_year", 3)]:
-        total_return_pct = returns[period_key]["return_pct"]
+    for year_label, return_data in returns.items():
+        period_years = return_data["years_back"]
+        total_return_pct = return_data["return_pct"]
         annualized_pct = ((1 + total_return_pct / 100) ** (1 / period_years) - 1) * 100
         annualized_rates.append(annualized_pct)
 
     avg_annual_return_pct = round(sum(annualized_rates) / len(annualized_rates), 2)
 
+    current_year = date.today().year
     yearly_projection = {}
     value = investment_amount
-    for year in range(1, years + 1):
+    for i in range(1, years + 1):
         value = value * (1 + avg_annual_return_pct / 100)
-        yearly_projection[f"year_{year}"] = round(value, 2)
+        future_year_label = str(current_year + i)
+        yearly_projection[future_year_label] = round(value, 2)
 
     return {
         "symbol": symbol,
