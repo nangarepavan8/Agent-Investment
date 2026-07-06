@@ -48,6 +48,9 @@ EVAL_CASES = [
     (None, "Should I invest in TCS?", ["market_context_tool"]),
     (None, "What is diversification?", []),
     (None, "How is the IT sector doing today?", ["sector_performance_tool"]),
+    (None, "I'm 30 years old and want to invest ₹200000, what should my allocation be?", ["investment_guidance_tool"]),
+    (None, "How has TCS performed over the last 3 years?", ["historical_performance_tool"]),
+    (None, "Give me a stock screener for aggressive risk", ["stock_screener_tool"]),
 ]
 
 

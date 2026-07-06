@@ -692,6 +692,49 @@ Open the **🧑‍💼 For Investors** tab, enter an age/amount/goal, and
 check: the allocation donut chart, the historical performance bars
 (try TCS.NS), the sector comparison, and the downloadable report.
 
+## Stretch Features, Round 11: Stock Screener + Investor Chat
+
+**A boundary held, explained honestly:** the original request in this
+round again asked for "breakout" stock predictions framed to make the
+investor happy. This was declined for the same reason as before — no
+one can reliably predict a breakout, and picking stocks to engineer a
+positive emotional reaction is dishonest by design. What WAS built
+instead is the responsible version: real, current, verifiable data,
+personalized by risk category, never framed as a forecast.
+
+**1. Stock Screener** (`src/tools/stock_screener.py`, new **🔎 Stock
+Screener** tab) — screens a fixed universe of real Indian stocks for
+three REAL, CURRENT data points: proximity to 52-week high, P/E
+valuation, recent earnings growth. Results are tagged and SORTED by
+relevance to a risk category (Conservative prioritizes low P/E value
+picks; Aggressive prioritizes momentum/earnings growth) — but every
+field shown is real, verifiable, as-of-today data. The tab explicitly
+states this is not a prediction and auto-detects the investor's risk
+category from the "For Investors" tab if already generated.
+
+**2. Investor-facing chat** (bottom of the "For Investors" tab, after
+guidance is generated) — a scoped chat where a self-service investor
+can ask follow-up questions ("why low P/E stocks for me?", "how has
+TCS done over 3 years?", "how's the IT sector today?") using 3 new
+tools: `investment_guidance_tool`, `historical_performance_tool`,
+`stock_screener_tool` — the agent automatically has context on that
+investor's own age/risk category/goal so follow-ups don't need
+re-explaining. Same reasoning-trace expander as the advisor chat.
+
+**System prompt reinforcement:** explicit new rule — screener and
+historical-performance results must be presented factually and
+neutrally, never reframed as a forecast or with emotionally
+persuasive language ("can't-miss," "will make you rich").
+
+Test it:
+```bash
+python -m src.tools.stock_screener
+streamlit run app.py
+```
+Generate guidance in "For Investors," check the risk category
+auto-fills in "🔎 Stock Screener," run the screener, then ask a
+follow-up question in the investor chat section.
+
 ## Roadmap
 
 | Day | Milestone |
@@ -716,5 +759,6 @@ check: the allocation donut chart, the historical performance bars
 | Stretch 8 | Visual polish: clickable questions + donut charts ✅ |
 | Stretch 9 | Daily Excel valuation snapshot + fixed-date bug fix ✅ |
 | Stretch 10 | Real Indian tickers + sector data + "For Investors" self-service tab ✅ |
+| Stretch 11 | Stock screener (real data, no predictions) + investor chat ✅ |
 
 🎉 **Build complete.** See `DEMO_SCRIPT.md` for your presentation guide.

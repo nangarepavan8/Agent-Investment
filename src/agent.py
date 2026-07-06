@@ -23,6 +23,9 @@ from src.tools.rebalancing import suggest_rebalancing
 from src.tools.market_context import get_market_context
 from src.tools.profit_booking import suggest_profit_booking
 from src.tools.sector_performance import get_sector_performance
+from src.tools.investor_guidance import get_investment_guidance
+from src.tools.historical_performance import get_historical_returns
+from src.tools.stock_screener import get_stock_screener
 from src.memory import store_memory, retrieve_relevant_memory
 from src.audit_log import log_event
 
@@ -124,8 +127,55 @@ def sector_performance_tool(sector_name: str = None) -> str:
         return json.dumps({"error": str(e)})
 
 
+@tool
+def investment_guidance_tool(age: int, investment_amount: float, goal: str = "Wealth Growth",
+                              time_horizon: str = None) -> str:
+    """Get rule-based, explainable risk profile and asset-allocation
+    guidance for a SELF-SERVICE investor (not one of the CLIENT_001-010
+    advisor clients) based on their own age, amount to invest, goal,
+    and time horizon. Use this when a general investor (not an advisor
+    asking about a specific client) asks how they should allocate
+    their money, what their risk profile should be, or how to invest
+    based on their age/amount. goal must be one of: Retirement, Wealth
+    Growth, Child Education, Home Purchase, Regular Income."""
+    try:
+        return json.dumps(get_investment_guidance(age, investment_amount, goal, time_horizon))
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+@tool
+def historical_performance_tool(symbol: str) -> str:
+    """Get REAL historical 1/2/3-year returns for a stock (a look
+    BACKWARD at actual past performance, never a prediction of future
+    performance). Use this when the user asks how a stock has actually
+    performed historically, or wants to see real past returns before
+    making a decision."""
+    try:
+        return json.dumps(get_historical_returns(symbol))
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+@tool
+def stock_screener_tool(risk_category: str = "Moderate") -> str:
+    """Screen real, current stock market data (proximity to 52-week
+    high, P/E valuation, recent earnings growth) across a fixed
+    universe of real Indian stocks, sorted by relevance to a risk
+    category. Use this when a self-service investor asks for stock
+    ideas, a screener, or "what stocks fit my risk profile" — this
+    returns REAL CURRENT DATA ONLY, never a prediction of future
+    performance. risk_category must be Conservative, Moderate, or
+    Aggressive."""
+    try:
+        return json.dumps(get_stock_screener(risk_category))
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
 ALL_TOOLS = [portfolio_summary_tool, risk_score_tool, rebalancing_tool, market_context_tool,
-             profit_booking_tool, sector_performance_tool]
+             profit_booking_tool, sector_performance_tool, investment_guidance_tool,
+             historical_performance_tool, stock_screener_tool]
 
 TOOLS_BY_NAME = {t.name: t for t in ALL_TOOLS}
 
@@ -188,12 +238,23 @@ Before answering, silently work through:
   sector doing today", "which sector is performing best") — NOT for a
   specific client's own sector allocation (use portfolio_summary_tool
   for that).
+- **investment_guidance_tool** — rule-based risk profile and asset
+  allocation for a SELF-SERVICE investor (not an advisor client) based
+  on their own age/amount/goal/horizon. Use when a general investor
+  asks how to allocate their money or what their risk profile is.
+- **historical_performance_tool** — REAL 1/2/3-year historical
+  returns for a stock. This looks BACKWARD at actual past data only.
+- **stock_screener_tool** — real, current stock data (52-week high
+  proximity, P/E, earnings growth) sorted by risk-category relevance.
+  REAL DATA ONLY, never a prediction.
 - **No tool** — general finance/investing education (e.g. "what is
   diversification", "how does compound interest work", "ETF vs mutual
   fund", "what is a P/E ratio") is answered directly from your own
   knowledge. Not every question needs a tool call.
 
 client_id must always be in the format CLIENT_001 through CLIENT_010.
+Self-service investor questions (investment_guidance_tool, stock_screener_tool)
+don't use client_id — they use the individual's own age/amount/risk category instead.
 
 # OUTPUT STYLE
 
@@ -238,7 +299,14 @@ client_id must always be in the format CLIENT_001 through CLIENT_010.
   plainly that future performance can't be reliably predicted.
 - For profit-booking/tax-loss questions: profit_booking_tool IS a
   legitimate, rule-based calculation from real data — present its
-  findings directly and confidently, this is not speculative advice."""
+  findings directly and confidently, this is not speculative advice.
+- For stock_screener_tool and historical_performance_tool results:
+  these are REAL, CURRENT/PAST data snapshots — present them plainly
+  and factually, but NEVER reframe them as a forecast, a "breakout"
+  prediction, or a guarantee of future gains. Always note these
+  reflect present/past data, not what will happen next. Never
+  editorialize with emotionally persuasive language (e.g. "this will
+  make you rich," "can't-miss pick") — stay factual and neutral."""
 
 
 def run_agent(user_query: str, client_id: str = None, verbose: bool = True) -> dict:

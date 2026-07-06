@@ -21,6 +21,7 @@ from src.audit_log import log_event, load_audit_log
 from src.tools.investor_guidance import get_investment_guidance, VALID_GOALS, VALID_HORIZONS
 from src.tools.historical_performance import get_historical_returns
 from src.tools.sector_performance import get_sector_performance, NIFTY_SECTOR_INDICES
+from src.tools.stock_screener import get_stock_screener
 
 st.set_page_config(
     page_title="Agentic Investment Research Assistant",
@@ -130,8 +131,8 @@ with st.expander("ℹ️ How this works (architecture)"):
     Fabric, and Azure hosting for production, multi-user deployment.
     """)
 
-tab_chat, tab_dashboard, tab_alerts, tab_audit, tab_investor = st.tabs(
-    ["💬 Chat", "📊 Dashboard", "🔔 Portfolio Alerts", "📋 Audit Log", "🧑‍💼 For Investors"]
+tab_chat, tab_dashboard, tab_alerts, tab_audit, tab_investor, tab_screener = st.tabs(
+    ["💬 Chat", "📊 Dashboard", "🔔 Portfolio Alerts", "📋 Audit Log", "🧑‍💼 For Investors", "🔎 Stock Screener"]
 )
 
 # ---------------------------------------------------------------------------
@@ -560,3 +561,98 @@ with tab_investor:
         ):
             pass
         st.success("✅ Your personalized report is ready to download above.")
+
+        # --- Ask questions about this guidance (investor-facing chat) ---
+        st.markdown("---")
+        st.markdown("### Ask Questions About Your Guidance")
+        st.caption(
+            "Ask anything about your allocation, a specific stock's real historical "
+            "performance, or how sectors are doing today — answered using the same "
+            "real data shown above, never a prediction."
+        )
+
+        if "investor_chat_messages" not in st.session_state:
+            st.session_state.investor_chat_messages = []
+
+        for msg in st.session_state.investor_chat_messages:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+                if msg["role"] == "assistant" and msg.get("tool_calls"):
+                    with st.expander("🧠 Reasoning"):
+                        for tc in msg["tool_calls"]:
+                            st.markdown(f"- Called `{tc['name']}` with `{tc['args']}`")
+
+        investor_question = st.chat_input(
+            "e.g. Why low P/E stocks for me? How has TCS done over 3 years?",
+            key="investor_chat_input",
+        )
+
+        if investor_question:
+            st.session_state.investor_chat_messages.append({"role": "user", "content": investor_question})
+            with st.chat_message("user"):
+                st.markdown(investor_question)
+
+            # Give the agent context about this investor's own guidance, so
+            # "why did you suggest this for me" resolves without re-asking
+            context_note = (
+                f"[Context: this investor is age {guidance['age']}, risk category "
+                f"{guidance['risk_category']}, goal {guidance['goal']}, investing "
+                f"₹{guidance['investment_amount']:,.0f}.] {investor_question}"
+            )
+
+            with st.chat_message("assistant"):
+                with st.spinner("Thinking..."):
+                    try:
+                        result = run_agent(context_note, client_id=None, verbose=False)
+                        answer = result["answer"]
+                        tool_calls = result["tool_calls"]
+                    except Exception as e:
+                        answer = f"⚠️ Something went wrong: {e}"
+                        tool_calls = []
+                st.markdown(answer)
+
+            st.session_state.investor_chat_messages.append({
+                "role": "assistant", "content": answer, "tool_calls": tool_calls,
+            })
+            st.rerun()
+
+# ---------------------------------------------------------------------------
+# STOCK SCREENER TAB - real current data (52-week high proximity, P/E,
+# earnings growth), personalized by risk category. NOT a prediction tool.
+# ---------------------------------------------------------------------------
+with tab_screener:
+    st.subheader("Stock Screener — Real Current Data")
+    st.caption(
+        "⚠️ This shows REAL, CURRENT market data (as of today) — proximity to "
+        "52-week highs, P/E valuation, recent earnings growth. It is NOT a "
+        "prediction of future performance and does not guarantee any outcome."
+    )
+
+    # Auto-suggest risk category from investor guidance if already generated
+    default_risk = "Moderate"
+    if "investor_guidance_result" in st.session_state:
+        default_risk = st.session_state.investor_guidance_result["risk_category"]
+        st.info(f"ℹ️ Using your risk category from the 'For Investors' tab: **{default_risk}**")
+
+    risk_options = ["Conservative", "Moderate", "Aggressive"]
+    selected_risk = st.selectbox(
+        "Risk category", risk_options, index=risk_options.index(default_risk)
+    )
+
+    if st.button("Run Screener", use_container_width=True):
+        with st.spinner("Fetching real current market data..."):
+            screener_result = get_stock_screener(selected_risk)
+
+        if "error" in screener_result:
+            st.warning(f"⚠️ {screener_result['error']}")
+        else:
+            st.success(f"Showing results sorted for **{screener_result['risk_category']}** risk category")
+
+            screener_df = pd.DataFrame(screener_result["results"])
+            if not screener_df.empty:
+                screener_df["tags"] = screener_df["tags"].apply(lambda t: ", ".join(t) if t else "—")
+                st.dataframe(screener_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("No stocks currently match — try again shortly.")
+
+            st.caption(f"ℹ️ {screener_result['disclaimer']}")
