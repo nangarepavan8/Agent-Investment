@@ -117,6 +117,9 @@ def calc_risk_score(client_id: str) -> Dict[str, Any]:
         "risk_score": risk_score,
         "risk_level": risk_level,
         "contributing_factors": factors,
+        "top_sector": top_sector,
+        "max_sector_pct": round(max_sector_pct, 1),
+        "safe_ratio_pct": round(safe_ratio_pct, 1),
     }
 
 

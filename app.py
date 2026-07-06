@@ -21,7 +21,8 @@ from src.audit_log import log_event, load_audit_log
 from src.tools.investor_guidance import get_investment_guidance, VALID_GOALS, VALID_HORIZONS
 from src.tools.historical_performance import get_historical_returns
 from src.tools.sector_performance import get_sector_performance, NIFTY_SECTOR_INDICES
-from src.tools.stock_screener import get_stock_screener
+from src.tools.stock_screener import get_stock_screener, SYMBOL_TO_SECTOR
+from src.tools.growth_illustrator import get_hypothetical_growth
 
 st.set_page_config(
     page_title="Agentic Investment Research Assistant",
@@ -215,7 +216,7 @@ with tab_dashboard:
         st.dataframe(holdings_df, use_container_width=True, hide_index=True)
 
         if summary["other_investments"]:
-            st.subheader("Fixed Deposits, Bonds & Government Schemes")
+            st.subheader("Fixed Deposits, Bonds & Government Schemes (incl. Gold via Sovereign Gold Bond)")
             other_df = pd.DataFrame(summary["other_investments"])
             st.dataframe(other_df, use_container_width=True, hide_index=True)
         else:
@@ -253,6 +254,7 @@ with tab_alerts:
                     st.error(f"🔴 {alert['message']}")
                 else:
                     st.warning(f"🟠 {alert['message']}")
+                st.caption(f"💡 Suggested action: {alert['suggested_action']}")
     else:
         st.info("Click 'Run Portfolio Scan' to check all clients for risk issues.")
 
@@ -639,9 +641,25 @@ with tab_screener:
         "Risk category", risk_options, index=risk_options.index(default_risk)
     )
 
+    # Sector interest intake — if the user picks none, we screen all sectors
+    # automatically rather than blocking them (manual fallback, per request)
+    available_sectors = sorted(set(SYMBOL_TO_SECTOR.values()))
+    selected_sectors = st.multiselect(
+        "Which sectors are you interested in? (optional — leave blank to screen all sectors)",
+        available_sectors,
+    )
+    if not selected_sectors:
+        st.caption("No preference selected — screening across ALL sectors automatically.")
+
     if st.button("Run Screener", use_container_width=True):
         with st.spinner("Fetching real current market data..."):
-            screener_result = get_stock_screener(selected_risk)
+            screener_result = get_stock_screener(
+                selected_risk, preferred_sectors=selected_sectors if selected_sectors else None
+            )
+        st.session_state.last_screener_result = screener_result
+
+    if "last_screener_result" in st.session_state:
+        screener_result = st.session_state.last_screener_result
 
         if "error" in screener_result:
             st.warning(f"⚠️ {screener_result['error']}")
@@ -651,8 +669,102 @@ with tab_screener:
             screener_df = pd.DataFrame(screener_result["results"])
             if not screener_df.empty:
                 screener_df["tags"] = screener_df["tags"].apply(lambda t: ", ".join(t) if t else "—")
-                st.dataframe(screener_df, use_container_width=True, hide_index=True)
+                display_cols = ["symbol", "sector", "company_name", "current_price",
+                                 "pct_from_52wk_high", "pe_ratio", "earnings_growth_pct", "tags", "reason"]
+                display_cols = [c for c in display_cols if c in screener_df.columns]
+                st.dataframe(screener_df[display_cols], use_container_width=True, hide_index=True)
             else:
                 st.info("No stocks currently match — try again shortly.")
 
             st.caption(f"ℹ️ {screener_result['disclaimer']}")
+
+        # --- Hypothetical Growth Illustrator (honest reframe of "future prediction") ---
+        st.markdown("---")
+        st.markdown("### Hypothetical Growth Illustrator")
+        st.warning(
+            "⚠️ **This is NOT a prediction or forecast.** It illustrates what an investment "
+            "might hypothetically look like IF a stock's real historical average annual "
+            "return continued unchanged — it will not necessarily do so. Past performance "
+            "is not indicative of future returns."
+        )
+
+        illus_col1, illus_col2, illus_col3 = st.columns(3)
+        illus_symbol = illus_col1.selectbox(
+            "Stock", ["TCS.NS", "INFY.NS", "RELIANCE.NS", "HDFCBANK.NS", "TATAMOTORS.NS", "SUNPHARMA.NS"],
+            key="illustrator_symbol",
+        )
+        illus_amount = illus_col2.number_input("Hypothetical amount (₹)", min_value=1000, value=100000, step=1000)
+        illus_years = illus_col3.slider("Years", min_value=1, max_value=4, value=4)
+
+        if st.button("Show Hypothetical Illustration"):
+            with st.spinner("Calculating from real historical data..."):
+                growth_result = get_hypothetical_growth(illus_symbol, illus_amount, illus_years)
+
+            if "error" in growth_result:
+                st.warning(f"⚠️ {growth_result['error']}")
+            else:
+                st.caption(
+                    f"Based on {illus_symbol}'s real historical average annual return of "
+                    f"{growth_result['avg_annual_return_pct']:+.2f}%/year"
+                )
+
+                years_list = list(growth_result["yearly_projection"].keys())
+                values_list = list(growth_result["yearly_projection"].values())
+                bar_color = "#2ECC71" if growth_result["avg_annual_return_pct"] >= 0 else "#E74C3C"
+
+                growth_fig = go.Figure(data=[go.Bar(
+                    x=[y.replace("_", " ").title() for y in years_list],
+                    y=values_list,
+                    marker=dict(color=bar_color),
+                    text=[f"₹{v:,.0f}" for v in values_list],
+                    textposition="outside",
+                )])
+                growth_fig.update_layout(
+                    yaxis_title="Hypothetical Value (₹)",
+                    margin=dict(t=20, b=20, l=20, r=20),
+                    height=320,
+                )
+                st.plotly_chart(growth_fig, use_container_width=True, key="growth_illustrator_chart")
+                st.error(f"⚠️ {growth_result['disclaimer']}")
+
+        # --- Screener-specific chat section ---
+        st.markdown("---")
+        st.markdown("### Ask Questions About These Results")
+        st.caption("Ask about any stock or sector shown above — answered using real data, never a prediction.")
+
+        if "screener_chat_messages" not in st.session_state:
+            st.session_state.screener_chat_messages = []
+
+        for msg in st.session_state.screener_chat_messages:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+                if msg["role"] == "assistant" and msg.get("tool_calls"):
+                    with st.expander("🧠 Reasoning"):
+                        for tc in msg["tool_calls"]:
+                            st.markdown(f"- Called `{tc['name']}` with `{tc['args']}`")
+
+        screener_question = st.chat_input(
+            "e.g. Why is TCS tagged Low P/E? How has it performed historically?",
+            key="screener_chat_input",
+        )
+
+        if screener_question:
+            st.session_state.screener_chat_messages.append({"role": "user", "content": screener_question})
+            with st.chat_message("user"):
+                st.markdown(screener_question)
+
+            with st.chat_message("assistant"):
+                with st.spinner("Thinking..."):
+                    try:
+                        result = run_agent(screener_question, client_id=None, verbose=False)
+                        answer = result["answer"]
+                        tool_calls = result["tool_calls"]
+                    except Exception as e:
+                        answer = f"⚠️ Something went wrong: {e}"
+                        tool_calls = []
+                st.markdown(answer)
+
+            st.session_state.screener_chat_messages.append({
+                "role": "assistant", "content": answer, "tool_calls": tool_calls,
+            })
+            st.rerun()

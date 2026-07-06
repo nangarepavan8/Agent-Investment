@@ -26,6 +26,7 @@ from src.tools.sector_performance import get_sector_performance
 from src.tools.investor_guidance import get_investment_guidance
 from src.tools.historical_performance import get_historical_returns
 from src.tools.stock_screener import get_stock_screener
+from src.tools.growth_illustrator import get_hypothetical_growth
 from src.memory import store_memory, retrieve_relevant_memory
 from src.audit_log import log_event
 
@@ -158,24 +159,40 @@ def historical_performance_tool(symbol: str) -> str:
 
 
 @tool
-def stock_screener_tool(risk_category: str = "Moderate") -> str:
+def stock_screener_tool(risk_category: str = "Moderate", preferred_sectors: list = None) -> str:
     """Screen real, current stock market data (proximity to 52-week
     high, P/E valuation, recent earnings growth) across a fixed
     universe of real Indian stocks, sorted by relevance to a risk
-    category. Use this when a self-service investor asks for stock
-    ideas, a screener, or "what stocks fit my risk profile" — this
-    returns REAL CURRENT DATA ONLY, never a prediction of future
-    performance. risk_category must be Conservative, Moderate, or
-    Aggressive."""
+    category. Each result includes its sector, the stock name, and a
+    plain-language reason based on REAL current data (never a future
+    claim). Use this when a self-service investor asks for stock
+    ideas, a screener, or "what stocks fit my risk profile". Optionally
+    pass preferred_sectors (e.g. ["IT", "Banking"]) to filter to
+    specific sectors of interest — if not given, screens all sectors.
+    risk_category must be Conservative, Moderate, or Aggressive."""
     try:
-        return json.dumps(get_stock_screener(risk_category))
+        return json.dumps(get_stock_screener(risk_category, preferred_sectors=preferred_sectors))
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+@tool
+def growth_illustrator_tool(symbol: str, investment_amount: float, years: int = 4) -> str:
+    """Illustrate a HYPOTHETICAL year-by-year value if a stock's real
+    historical average annual return continued — this is explicitly
+    NOT a prediction or forecast, always present it with that framing.
+    Use this when a user wants to visualize/graph how an investment
+    amount might hypothetically grow over 1-4 years based on past
+    average performance. years must be 1-4."""
+    try:
+        return json.dumps(get_hypothetical_growth(symbol, investment_amount, years))
     except Exception as e:
         return json.dumps({"error": str(e)})
 
 
 ALL_TOOLS = [portfolio_summary_tool, risk_score_tool, rebalancing_tool, market_context_tool,
              profit_booking_tool, sector_performance_tool, investment_guidance_tool,
-             historical_performance_tool, stock_screener_tool]
+             historical_performance_tool, stock_screener_tool, growth_illustrator_tool]
 
 TOOLS_BY_NAME = {t.name: t for t in ALL_TOOLS}
 
@@ -245,16 +262,26 @@ Before answering, silently work through:
 - **historical_performance_tool** — REAL 1/2/3-year historical
   returns for a stock. This looks BACKWARD at actual past data only.
 - **stock_screener_tool** — real, current stock data (52-week high
-  proximity, P/E, earnings growth) sorted by risk-category relevance.
-  REAL DATA ONLY, never a prediction.
+  proximity, P/E, earnings growth) sorted by risk-category relevance,
+  with sector and plain-language reason per stock. REAL DATA ONLY,
+  never a prediction. Accepts optional preferred_sectors filter.
+- **growth_illustrator_tool** — HYPOTHETICAL year-by-year projection
+  using a stock's real historical average return. Always present this
+  as an illustration based on the past, never as a forecast or promise.
 - **No tool** — general finance/investing education (e.g. "what is
   diversification", "how does compound interest work", "ETF vs mutual
-  fund", "what is a P/E ratio") is answered directly from your own
-  knowledge. Not every question needs a tool call.
+  fund", "what is a P/E ratio", "how do FDs/RDs/bonds/gold work as
+  investments") is answered directly from your own knowledge. A
+  self-service investor can ask about ANY asset class — stocks, FD,
+  RD, bonds, gold — and you should answer helpfully either from your
+  own knowledge (general characteristics, typical rates, risk/return
+  tradeoffs) or the relevant tool if it's about a specific real client.
+  Not every question needs a tool call.
 
 client_id must always be in the format CLIENT_001 through CLIENT_010.
-Self-service investor questions (investment_guidance_tool, stock_screener_tool)
-don't use client_id — they use the individual's own age/amount/risk category instead.
+Self-service investor questions (investment_guidance_tool, stock_screener_tool,
+growth_illustrator_tool) don't use client_id — they use the individual's
+own age/amount/risk category instead.
 
 # OUTPUT STYLE
 
@@ -262,6 +289,11 @@ don't use client_id — they use the individual's own age/amount/risk category i
   busy; don't bury the number they asked for in a preamble.
 - Use short paragraphs or bullet points for multi-part answers (e.g.
   risk factors, rebalancing actions) — never dump raw JSON.
+- Whenever you discuss a SECTOR (e.g. "IT sector is up today"), also
+  name specific real stocks within that sector from the data available
+  (e.g. "IT sector — including TCS, Infosys, Wipro — is up 1.2% today")
+  rather than naming the sector alone. Sector-level and stock-level
+  information should appear together, not sector-only.
 - All client portfolio figures (stocks, cash, FD, RD, bonds, schemes)
   are in INR (₹) — real Indian (NSE) tickers, consistent throughout.
   If market_context_tool is used for a non-Indian ticker (e.g. AAPL),
@@ -306,7 +338,12 @@ don't use client_id — they use the individual's own age/amount/risk category i
   prediction, or a guarantee of future gains. Always note these
   reflect present/past data, not what will happen next. Never
   editorialize with emotionally persuasive language (e.g. "this will
-  make you rich," "can't-miss pick") — stay factual and neutral."""
+  make you rich," "can't-miss pick") — stay factual and neutral.
+- For growth_illustrator_tool results: ALWAYS state clearly this is a
+  hypothetical illustration based on past average returns, NOT a
+  prediction — repeat this framing every time this tool's output is
+  shown, never present the projected numbers as something that will
+  actually happen."""
 
 
 def run_agent(user_query: str, client_id: str = None, verbose: bool = True) -> dict:

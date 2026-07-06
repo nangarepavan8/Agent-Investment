@@ -43,6 +43,32 @@ def _save_snapshot(snapshot: Dict[str, Any]) -> None:
         json.dump(snapshot, f, indent=2)
 
 
+def _build_suggested_action(risk_result: Dict[str, Any]) -> str:
+    """
+    Build a concrete, data-driven suggestion based on THIS client's
+    actual biggest risk contributor — not a generic message. Compares
+    sector concentration vs. safe-asset allocation and suggests
+    whichever real lever would help most.
+    """
+    top_sector = risk_result["top_sector"]
+    max_sector_pct = risk_result["max_sector_pct"]
+    safe_ratio_pct = risk_result["safe_ratio_pct"]
+
+    if max_sector_pct >= 35 and safe_ratio_pct < 25:
+        return (f"Consider both: rebalancing out of {top_sector} ({max_sector_pct:.0f}% of stock "
+                f"holdings) into other sectors, AND increasing allocation to FD/RD/Bonds/PPF "
+                f"(currently only {safe_ratio_pct:.0f}% safe assets).")
+    elif max_sector_pct >= 35:
+        return (f"Consider rebalancing out of {top_sector} ({max_sector_pct:.0f}% of stock "
+                f"holdings) into underweighted sectors to reduce concentration risk.")
+    elif safe_ratio_pct < 25:
+        return (f"Consider increasing allocation to safer instruments (FD/RD/Bonds/PPF) — "
+                f"currently only {safe_ratio_pct:.0f}% of this client's total portfolio is in "
+                f"safe assets.")
+    else:
+        return "Risk driven mainly by stated risk profile rather than concentration — review with client directly."
+
+
 def scan_all_clients() -> List[Dict[str, Any]]:
     """
     Run a risk scan across every client and return a list of alerts for
@@ -52,7 +78,8 @@ def scan_all_clients() -> List[Dict[str, Any]]:
     Returns:
         list of alert dicts, each with:
             client_id, client_name, risk_score, risk_level,
-            alert_type ("high_risk" | "risk_increased"), message
+            alert_type ("high_risk" | "risk_increased"), message,
+            suggested_action (data-driven, not generic)
     """
     clients_df = load_clients()
     last_snapshot = _load_last_snapshot()
@@ -70,6 +97,7 @@ def scan_all_clients() -> List[Dict[str, Any]]:
         new_snapshot[client_id] = current_score
 
         previous_score = last_snapshot.get(client_id)
+        suggested_action = _build_suggested_action(risk_result)
 
         if current_level == "High":
             alerts.append({
@@ -80,6 +108,7 @@ def scan_all_clients() -> List[Dict[str, Any]]:
                 "alert_type": "high_risk",
                 "message": f"{client_name} ({client_id}) is at HIGH risk "
                            f"(score {current_score}/100).",
+                "suggested_action": suggested_action,
             })
         elif previous_score is not None and current_score > previous_score + 5:
             alerts.append({
@@ -90,6 +119,7 @@ def scan_all_clients() -> List[Dict[str, Any]]:
                 "alert_type": "risk_increased",
                 "message": f"{client_name} ({client_id})'s risk score increased "
                            f"from {previous_score} to {current_score} since the last scan.",
+                "suggested_action": suggested_action,
             })
 
     _save_snapshot(new_snapshot)

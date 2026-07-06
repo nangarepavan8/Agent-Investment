@@ -735,6 +735,64 @@ Generate guidance in "For Investors," check the risk category
 auto-fills in "🔎 Stock Screener," run the screener, then ask a
 follow-up question in the investor chat section.
 
+## Stretch Features, Round 12: Screener Depth, Alerts, Dashboard Fix
+
+**A boundary held again, explained honestly:** this round again asked
+for future price predictions ("this stock will grow to X money").
+Declined for the same reason as always — nobody can reliably know
+that. Built instead: a **Hypothetical Growth Illustrator** — the same
+graph experience (pick a stock, see 1-4 year values), computed from
+the stock's REAL historical average return, with the same mandatory
+"past performance is not indicative of future returns" framing real
+mutual funds use. Verified the underlying compounding math is
+mathematically correct with manual test cases.
+
+**1. Screener sector-interest intake** — multiselect for sectors of
+interest before running the screener; if left blank, automatically
+screens ALL sectors (manual fallback, no dead end).
+
+**2. Screener-specific chat section** — same pattern as the "For
+Investors" chat, scoped to screener results.
+
+**3. Plain-language "reason" per screener stock** — e.g. "P/E ratio of
+14.2 is below the 20 threshold — trading cheaper relative to earnings
+than average." Real current-data justification, explicitly not a
+future claim (reinforced in the system prompt).
+
+**4. "For Investors" chat now explicitly covers FD/RD/Bonds/Gold** —
+system prompt updated so general asset-class questions (not tied to a
+specific client) are answered helpfully regardless of asset type.
+
+**5. Sector + stock names always paired** — new system prompt rule:
+whenever a sector is discussed, name real stocks within it too, not
+the sector alone.
+
+**6. Hypothetical Growth Illustrator** (`src/tools/growth_illustrator.py`)
+— see above. Honest reframe of the "future prediction" request.
+
+**7. Portfolio Alerts now include a real, data-driven suggested action**
+— `calc_risk_score()` returns structured fields (`top_sector`,
+`max_sector_pct`, `safe_ratio_pct`); `monitoring.py` uses these to
+build a SPECIFIC suggestion per client (e.g. "rebalance out of IT (59%
+of holdings)" or "increase FD/RD/Bonds allocation") rather than a
+generic message.
+
+**8. Dashboard FD/RD/Bonds/Gold fix** — found and fixed a real gap: 3
+of 10 clients had zero non-stock investments by design (aggressive
+risk profile allowed 0-2 randomly), making that Dashboard section look
+broken/empty. Fixed the generator to guarantee every client has at
+least 1. Also clarified in the UI that Gold is represented via
+Sovereign Gold Bond.
+
+Test it all:
+```bash
+python data/generate_data.py      # regenerate with the guaranteed-minimum fix
+python -m src.tools.stock_screener
+python -m src.tools.growth_illustrator
+python -m src.monitoring           # check suggested_action appears
+streamlit run app.py
+```
+
 ## Roadmap
 
 | Day | Milestone |
@@ -760,5 +818,6 @@ follow-up question in the investor chat section.
 | Stretch 9 | Daily Excel valuation snapshot + fixed-date bug fix ✅ |
 | Stretch 10 | Real Indian tickers + sector data + "For Investors" self-service tab ✅ |
 | Stretch 11 | Stock screener (real data, no predictions) + investor chat ✅ |
+| Stretch 12 | Screener depth (reasons, sectors, chat), growth illustrator, data-driven alerts, dashboard fix ✅ |
 
 🎉 **Build complete.** See `DEMO_SCRIPT.md` for your presentation guide.

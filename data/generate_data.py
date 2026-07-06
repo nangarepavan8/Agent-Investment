@@ -164,7 +164,7 @@ def generate_other_investments(clients):
         elif client["risk_profile"] == "Moderate":
             num_instruments = random.randint(1, 3)
         else:
-            num_instruments = random.randint(0, 2)
+            num_instruments = random.randint(1, 2)
 
         instrument_types = random.sample(
             list(INSTRUMENT_RATES.keys()), min(num_instruments, len(INSTRUMENT_RATES))
