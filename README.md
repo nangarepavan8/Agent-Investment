@@ -638,6 +638,60 @@ python scripts/daily_valuation_snapshot.py
 
 Both options produce the exact same file — pick whichever fits how you're already managing this project.
 
+## Stretch Features, Round 10: "For Investors" — Self-Service End-User Tab
+
+A genuinely new user-facing feature: a separate tab for a generic
+self-service investor, distinct from the advisor tools throughout the
+rest of the app. No client_id needed — takes a real person's own age,
+investable amount, and goal directly.
+
+**Important framing decision:** the original request included having
+the agent name specific real, named individuals (e.g. well-known
+investors) as "invested in this stock, so you should too." This was
+NOT built — fabricating or guessing a real person's actual holdings
+and presenting that as fact to influence someone else's money
+decisions is a real misinformation risk (and one of the people
+mentioned is deceased, making "current" claims about them actively
+misleading). If you want a "notable investor" feature later, it
+should only use real, cited, publicly-disclosed shareholding data
+(a legitimate category in Indian markets via regulatory disclosure),
+never fabricated picks.
+
+**What WAS built, all using real data, no new paid APIs:**
+
+**1. Age + amount + goal → risk profile & allocation** (`src/tools/investor_guidance.py`)
+Rule-based, fully explainable (same philosophy as `calc_risk_score`):
+uses the classic "100 minus age = equity %" rule of thumb, adjusted
+for stated goal and time horizon. Returns a risk category
+(Conservative/Moderate/Aggressive), a suggested allocation across
+Equity/Debt/Gold/Cash, and the rupee breakdown — always with an
+explicit disclaimer that this is educational guidance, not
+personalized financial advice.
+
+**2. Historical performance lookback** (`src/tools/historical_performance.py`)
+Real 1/2/3-year historical returns via yfinance — shown as green
+(positive) or red (negative) bars. This is a look BACKWARD at actual
+data, never a forward prediction — consistent with the project's
+existing rule against forecasting future prices.
+
+**3. Sector comparison** (reuses existing `sector_performance_tool`)
+Real, live today's performance across all Nifty sector indices, shown
+as a color-coded bar chart — helps a self-service investor see where
+current momentum is, using data already built in Round 7.
+
+**4. Downloadable personalized report + notification**
+One click generates a plain-text report (age, amount, goal, full
+allocation breakdown, reasoning, disclaimer) via `st.download_button`,
+with a confirmation message after generation.
+
+Test it:
+```bash
+streamlit run app.py
+```
+Open the **🧑‍💼 For Investors** tab, enter an age/amount/goal, and
+check: the allocation donut chart, the historical performance bars
+(try TCS.NS), the sector comparison, and the downloadable report.
+
 ## Roadmap
 
 | Day | Milestone |
@@ -661,5 +715,6 @@ Both options produce the exact same file — pick whichever fits how you're alre
 | Stretch 7 | Expanded client data + multi-asset portfolios (FD/RD/Bonds/schemes) ✅ |
 | Stretch 8 | Visual polish: clickable questions + donut charts ✅ |
 | Stretch 9 | Daily Excel valuation snapshot + fixed-date bug fix ✅ |
+| Stretch 10 | Real Indian tickers + sector data + "For Investors" self-service tab ✅ |
 
 🎉 **Build complete.** See `DEMO_SCRIPT.md` for your presentation guide.

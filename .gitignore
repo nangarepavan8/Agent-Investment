@@ -24,9 +24,3 @@ data/audit_log.csv
 # IDE
 .vscode/
 .idea/
-
-
-# Monitoring snapshot (generated state, not source)
-data/monitoring_snapshot.json
-data/audit_log.csv
-data/daily_valuation_snapshot.xlsx

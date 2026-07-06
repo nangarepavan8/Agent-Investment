@@ -18,6 +18,9 @@ from src.tools.portfolio_summary import get_portfolio_summary
 from src.tools.risk_score import calc_risk_score
 from src.monitoring import scan_all_clients
 from src.audit_log import log_event, load_audit_log
+from src.tools.investor_guidance import get_investment_guidance, VALID_GOALS, VALID_HORIZONS
+from src.tools.historical_performance import get_historical_returns
+from src.tools.sector_performance import get_sector_performance, NIFTY_SECTOR_INDICES
 
 st.set_page_config(
     page_title="Agentic Investment Research Assistant",
@@ -127,8 +130,8 @@ with st.expander("ℹ️ How this works (architecture)"):
     Fabric, and Azure hosting for production, multi-user deployment.
     """)
 
-tab_chat, tab_dashboard, tab_alerts, tab_audit = st.tabs(
-    ["💬 Chat", "📊 Dashboard", "🔔 Portfolio Alerts", "📋 Audit Log"]
+tab_chat, tab_dashboard, tab_alerts, tab_audit, tab_investor = st.tabs(
+    ["💬 Chat", "📊 Dashboard", "🔔 Portfolio Alerts", "📋 Audit Log", "🧑‍💼 For Investors"]
 )
 
 # ---------------------------------------------------------------------------
@@ -363,3 +366,197 @@ with tab_audit:
             file_name="audit_log_export.csv",
             mime="text/csv",
         )
+
+# ---------------------------------------------------------------------------
+# FOR INVESTORS TAB - self-service end-user experience, separate from the
+# advisor-facing client tools above. No client_id needed - takes a generic
+# investor's own age/amount/goal directly.
+# ---------------------------------------------------------------------------
+with tab_investor:
+    st.subheader("Get Your Personalized Investment Guidance")
+    st.caption(
+        "This is educational, rule-based guidance — not personalized financial "
+        "advice. It does not predict future returns and is not a substitute "
+        "for a licensed financial advisor."
+    )
+
+    with st.form("investor_intake_form"):
+        col_a, col_b = st.columns(2)
+        investor_age = col_a.number_input("Your age", min_value=18, max_value=100, value=30, step=1)
+        investment_amount = col_b.number_input(
+            "Amount you want to invest (₹)", min_value=1000, value=100000, step=1000
+        )
+
+        col_c, col_d = st.columns(2)
+        investor_goal = col_c.selectbox("Investment goal", VALID_GOALS)
+        investor_horizon = col_d.selectbox("Time horizon (optional)", ["Let the guidance infer this"] + VALID_HORIZONS)
+
+        submitted = st.form_submit_button("Get My Guidance", use_container_width=True)
+
+    if submitted or "investor_guidance_result" in st.session_state:
+        if submitted:
+            horizon_arg = None if investor_horizon == "Let the guidance infer this" else investor_horizon
+            guidance = get_investment_guidance(
+                age=int(investor_age),
+                investment_amount=float(investment_amount),
+                goal=investor_goal,
+                time_horizon=horizon_arg,
+            )
+            st.session_state.investor_guidance_result = guidance
+            log_event("investor_guidance_generated", None, {
+                "age": investor_age, "amount": investment_amount, "goal": investor_goal
+            })
+
+        guidance = st.session_state.investor_guidance_result
+
+        st.markdown("---")
+        risk_colors = {"Conservative": "🟢", "Moderate": "🟡", "Aggressive": "🔴"}
+        st.markdown(
+            f"### Your Risk Category: {risk_colors.get(guidance['risk_category'], '')} {guidance['risk_category']}"
+        )
+        st.caption(f"Based on age {guidance['age']}, goal: {guidance['goal']}, horizon: {guidance['time_horizon']}")
+
+        alloc_col, factors_col = st.columns([2, 1])
+
+        with alloc_col:
+            st.markdown("**Suggested Asset Allocation**")
+            fig = go.Figure(data=[go.Pie(
+                labels=list(guidance["allocation_pct"].keys()),
+                values=list(guidance["allocation_pct"].values()),
+                hole=0.55,
+                marker=dict(colors=DONUT_COLORS, line=dict(color="#FFFFFF", width=2)),
+                textinfo="label+percent",
+                textposition="outside",
+            )])
+            fig.update_layout(showlegend=False, margin=dict(t=10, b=10, l=10, r=10), height=320)
+            st.plotly_chart(fig, use_container_width=True, key="investor_allocation_donut")
+
+            alloc_table = pd.DataFrame([
+                {"Asset Class": k, "Allocation %": v, "Amount (₹)": guidance["allocation_amount"][k]}
+                for k, v in guidance["allocation_pct"].items()
+            ])
+            st.dataframe(alloc_table, use_container_width=True, hide_index=True)
+
+        with factors_col:
+            st.markdown("**Why this allocation?**")
+            for factor in guidance["contributing_factors"]:
+                st.markdown(f"- {factor}")
+
+        st.info(f"ℹ️ {guidance['disclaimer']}")
+
+        # --- Historical performance lookback (real data, not a prediction) ---
+        st.markdown("---")
+        st.markdown("### Historical Performance Lookback (Real Data)")
+        st.caption(
+            "Past performance over 1/2/3 years — shown as-is, NOT a forecast of future returns."
+        )
+
+        example_tickers = ["TCS.NS", "INFY.NS", "RELIANCE.NS", "HDFCBANK.NS", "TATAMOTORS.NS", "SUNPHARMA.NS"]
+        selected_ticker = st.selectbox("Choose a stock to view its historical performance", example_tickers)
+
+        if st.button("Show Historical Performance"):
+            with st.spinner("Fetching real historical data..."):
+                hist_result = get_historical_returns(selected_ticker)
+
+            if "error" in hist_result:
+                st.warning(f"⚠️ {hist_result['error']}")
+            else:
+                st.caption(f"Current price: ₹{hist_result['current_price']:,.2f}")
+                bar_labels = []
+                bar_values = []
+                bar_colors = []
+                for period_label, period_data in hist_result["returns"].items():
+                    bar_labels.append(period_label.replace("_", " ").title())
+                    bar_values.append(period_data["return_pct"])
+                    bar_colors.append("#2ECC71" if period_data["is_positive"] else "#E74C3C")
+
+                bar_fig = go.Figure(data=[go.Bar(
+                    x=bar_labels, y=bar_values,
+                    marker=dict(color=bar_colors),
+                    text=[f"{v:+.1f}%" for v in bar_values],
+                    textposition="outside",
+                )])
+                bar_fig.update_layout(
+                    yaxis_title="Return %",
+                    margin=dict(t=20, b=20, l=20, r=20),
+                    height=320,
+                )
+                st.plotly_chart(bar_fig, use_container_width=True, key="historical_return_bar")
+
+        # --- Sector comparison (real data, today's performance) ---
+        st.markdown("---")
+        st.markdown("### Sector Comparison (Today's Real Performance)")
+        st.caption("Compare how different sectors are performing today — helps spot where the current momentum is.")
+
+        if st.button("Compare Sectors"):
+            with st.spinner("Fetching real sector index data..."):
+                sector_result = get_sector_performance()
+
+            if "error" in sector_result:
+                st.warning(f"⚠️ {sector_result['error']}")
+            else:
+                perf = sector_result["sector_performance_pct"]
+                sector_colors = ["#2ECC71" if v >= 0 else "#E74C3C" for v in perf.values()]
+                sector_fig = go.Figure(data=[go.Bar(
+                    x=list(perf.keys()), y=list(perf.values()),
+                    marker=dict(color=sector_colors),
+                    text=[f"{v:+.2f}%" for v in perf.values()],
+                    textposition="outside",
+                )])
+                sector_fig.update_layout(
+                    yaxis_title="Today's Change %",
+                    margin=dict(t=20, b=20, l=20, r=20),
+                    height=320,
+                )
+                st.plotly_chart(sector_fig, use_container_width=True, key="sector_comparison_bar")
+
+                if "best_performing_sector" in sector_result:
+                    best = sector_result["best_performing_sector"]
+                    worst = sector_result["worst_performing_sector"]
+                    st.caption(
+                        f"🟢 Best today: {best['sector']} ({best['change_pct']:+.2f}%)  |  "
+                        f"🔴 Worst today: {worst['sector']} ({worst['change_pct']:+.2f}%)"
+                    )
+
+        # --- Individual report generation ---
+        st.markdown("---")
+        st.markdown("### Download Your Personalized Report")
+
+        report_lines = [
+            "PERSONALIZED INVESTMENT GUIDANCE REPORT",
+            "=" * 50,
+            "",
+            f"Age: {guidance['age']}",
+            f"Investment Amount: ₹{guidance['investment_amount']:,.2f}",
+            f"Goal: {guidance['goal']}",
+            f"Time Horizon: {guidance['time_horizon']}",
+            f"Risk Category: {guidance['risk_category']}",
+            "",
+            "SUGGESTED ASSET ALLOCATION",
+            "-" * 50,
+        ]
+        for k, v in guidance["allocation_pct"].items():
+            report_lines.append(f"  {k}: {v}%  (₹{guidance['allocation_amount'][k]:,.2f})")
+        report_lines += [
+            "",
+            "WHY THIS ALLOCATION",
+            "-" * 50,
+        ]
+        for factor in guidance["contributing_factors"]:
+            report_lines.append(f"  - {factor}")
+        report_lines += [
+            "",
+            "IMPORTANT DISCLAIMER",
+            "-" * 50,
+            f"  {guidance['disclaimer']}",
+        ]
+        report_text = "\n".join(report_lines)
+
+        if st.download_button(
+            "📄 Download Report (.txt)",
+            data=report_text,
+            file_name=f"investment_guidance_report.txt",
+            mime="text/plain",
+        ):
+            pass
+        st.success("✅ Your personalized report is ready to download above.")
