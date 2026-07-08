@@ -25,7 +25,7 @@ SCREENER_UNIVERSE = [
     "HDFCBANK.NS", "ICICIBANK.NS", "SBIN.NS", "KOTAKBANK.NS", "AXISBANK.NS",
     "RELIANCE.NS", "ONGC.NS", "NTPC.NS", "POWERGRID.NS",
     "HINDUNILVR.NS", "ITC.NS", "NESTLEIND.NS", "TITAN.NS",
-    "TATAMOTORS.NS", "MARUTI.NS", "BAJAJ-AUTO.NS", "EICHERMOT.NS",
+    "HEROMOTOCO.NS", "MARUTI.NS", "BAJAJ-AUTO.NS", "EICHERMOT.NS",
     "SUNPHARMA.NS", "DRREDDY.NS", "CIPLA.NS", "DIVISLAB.NS",
     "LT.NS", "ADANIPORTS.NS", "ULTRACEMCO.NS",
 ]
@@ -37,7 +37,7 @@ SYMBOL_TO_SECTOR = {
     "KOTAKBANK.NS": "Banking", "AXISBANK.NS": "Banking",
     "RELIANCE.NS": "Energy", "ONGC.NS": "Energy", "NTPC.NS": "Energy", "POWERGRID.NS": "Energy",
     "HINDUNILVR.NS": "FMCG", "ITC.NS": "FMCG", "NESTLEIND.NS": "FMCG", "TITAN.NS": "FMCG",
-    "TATAMOTORS.NS": "Automobile", "MARUTI.NS": "Automobile",
+    "HEROMOTOCO.NS": "Automobile", "MARUTI.NS": "Automobile",
     "BAJAJ-AUTO.NS": "Automobile", "EICHERMOT.NS": "Automobile",
     "SUNPHARMA.NS": "Pharma", "DRREDDY.NS": "Pharma", "CIPLA.NS": "Pharma", "DIVISLAB.NS": "Pharma",
     "LT.NS": "Industrials", "ADANIPORTS.NS": "Industrials", "ULTRACEMCO.NS": "Industrials",
@@ -63,12 +63,15 @@ def _screen_one_stock(symbol: str) -> Optional[Dict[str, Any]]:
             return None
 
         pct_from_52wk_high = round(((current_price - fifty_two_week_high) / fifty_two_week_high) * 100, 2)
+        # Positive framing of the SAME real data: "97% of 52-week high"
+        # reads far less alarming than "-3% from high" for an identical fact
+        pct_of_52wk_high = round(100 + pct_from_52wk_high, 2)
 
         tags = []
         reasons = []
         if pct_from_52wk_high >= NEAR_52WK_HIGH_THRESHOLD_PCT:
             tags.append("Near 52-Week High")
-            reasons.append(f"Currently trading only {abs(pct_from_52wk_high):.1f}% below its 52-week high (as of today)")
+            reasons.append(f"Currently trading at {pct_of_52wk_high:.1f}% of its 52-week high (as of today)")
         if pe_ratio is not None and pe_ratio < PE_LOW_THRESHOLD:
             tags.append("Low P/E")
             reasons.append(f"P/E ratio of {pe_ratio:.1f} is below the {PE_LOW_THRESHOLD:.0f} threshold used here — trading cheaper relative to earnings than average")
@@ -84,7 +87,7 @@ def _screen_one_stock(symbol: str) -> Optional[Dict[str, Any]]:
             "sector": SYMBOL_TO_SECTOR.get(symbol, "Other"),
             "company_name": info.get("shortName", symbol),
             "current_price": current_price,
-            "pct_from_52wk_high": pct_from_52wk_high,
+            "pct_of_52wk_high": pct_of_52wk_high,
             "pe_ratio": round(pe_ratio, 2) if pe_ratio is not None else None,
             "earnings_growth_pct": round(earnings_growth * 100, 2) if earnings_growth is not None else None,
             "tags": tags,
@@ -95,7 +98,8 @@ def _screen_one_stock(symbol: str) -> Optional[Dict[str, Any]]:
 
 
 def get_stock_screener(risk_category: str = "Moderate", limit: int = 10,
-                        preferred_sectors: Optional[List[str]] = None) -> Dict[str, Any]:
+                        preferred_sectors: Optional[List[str]] = None,
+                        require_positive_signal: bool = True) -> Dict[str, Any]:
     """
     Screen the real stock universe and sort/tag results based on which
     risk category they're most relevant to. All fields are real,
@@ -106,6 +110,13 @@ def get_stock_screener(risk_category: str = "Moderate", limit: int = 10,
         limit: max number of results to return
         preferred_sectors: optional list of sectors to filter to (e.g.
             ["IT", "Banking"]) — if None or empty, screens ALL sectors
+        require_positive_signal: if True (default), only returns stocks
+            that crossed at least one real positive-data threshold
+            (near 52-week high, low P/E, or strong earnings growth) —
+            this filters the REAL universe down to stocks with a
+            genuine current highlight, it does not fabricate anything.
+            If nothing in the universe currently qualifies, this is
+            reported honestly rather than silently relaxed.
 
     Returns:
         dict with risk_category, results (list of screened stocks,
@@ -126,6 +137,24 @@ def get_stock_screener(risk_category: str = "Moderate", limit: int = 10,
     if not results:
         return {"error": "Could not fetch screener data right now — try again shortly."}
 
+    if require_positive_signal:
+        positive_results = [r for r in results if r["tags"]]
+        if positive_results:
+            results = positive_results
+        else:
+            # Be honest rather than silently show unfiltered results —
+            # tell the user nothing currently qualifies
+            return {
+                "risk_category": risk_category,
+                "results": [],
+                "disclaimer": (
+                    "No stocks in the current screening universe crossed a positive "
+                    "data threshold (near 52-week high, low P/E, or strong earnings "
+                    "growth) right now. This reflects real current market conditions "
+                    "— try again later or broaden your sector selection."
+                ),
+            }
+
     # Sort by relevance to the risk category using REAL data fields only
     if risk_category == "Conservative":
         # Prioritize lower P/E (value) and steadier, less momentum-chasing picks
@@ -134,7 +163,7 @@ def get_stock_screener(risk_category: str = "Moderate", limit: int = 10,
         # Prioritize proximity to 52-week high (momentum) and earnings growth
         results.sort(key=lambda r: (
             -(r["earnings_growth_pct"] or 0),
-            -(r["pct_from_52wk_high"] if r["pct_from_52wk_high"] is not None else -999),
+            -(r["pct_of_52wk_high"] if r["pct_of_52wk_high"] is not None else -999),
         ))
     else:  # Moderate — balanced mix
         results.sort(key=lambda r: -len(r["tags"]))

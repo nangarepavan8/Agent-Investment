@@ -831,6 +831,39 @@ Open "For Investors," generate guidance, then try the Historical
 Performance section (switch Bar/Line, try Daily/Weekly/Monthly price
 history) and the Growth Illustrator (real future years, Bar/Line).
 
+## Stretch Features, Round 14: Honest Positive Framing + Visual Redesign
+
+**Clarified, not a bug:** "% from 52-week high" is mathematically
+almost always negative (only a stock exactly at its high shows 0%) —
+that's expected, not an error. Fixed the *display*, not the data:
+
+**1. Positive-framed metric** — now shows "97% of 52-week high"
+instead of "-3% from high" — identical real number, far less alarming
+presentation.
+
+**2. Screener filters to genuine positive signals** — by default, only
+shows stocks that crossed at least one real threshold (near 52-week
+high, low P/E, or strong earnings growth). If genuinely nothing in
+the universe qualifies right now, this is reported honestly rather
+than silently showing unfiltered results.
+
+**3. "The Complete Picture" education panel** (`src/tools/asset_education.py`)
+— alongside stock ideas, general educational cards on Fixed Deposits,
+Recurring Deposits, Emergency Fund, and Cash — benefits and tradeoffs
+for each, standard personal-finance facts, not tied to any specific
+product or rate.
+
+**4. Visual redesign** — gradient hero banner, styled metric cards
+with hover effects, polished tabs, gradient buttons, softer sidebar —
+custom CSS injected via `st.markdown(unsafe_allow_html=True)`.
+
+Test it:
+```bash
+python -m src.tools.stock_screener
+python -m src.tools.asset_education
+streamlit run app.py
+```
+
 ## Roadmap
 
 | Day | Milestone |
@@ -858,5 +891,6 @@ history) and the Growth Illustrator (real future years, Bar/Line).
 | Stretch 11 | Stock screener (real data, no predictions) + investor chat ✅ |
 | Stretch 12 | Screener depth (reasons, sectors, chat), growth illustrator, data-driven alerts, dashboard fix ✅ |
 | Stretch 13 | Real calendar years + monthly/weekly granularity + bar/line/pie chart toggles ✅ |
+| Stretch 14 | Positive-framed metrics, asset education panel, full visual redesign ✅ |
 
 🎉 **Build complete.** See `DEMO_SCRIPT.md` for your presentation guide.

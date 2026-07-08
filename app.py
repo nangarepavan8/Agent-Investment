@@ -23,12 +23,97 @@ from src.tools.historical_performance import get_historical_returns, get_price_h
 from src.tools.sector_performance import get_sector_performance, NIFTY_SECTOR_INDICES
 from src.tools.stock_screener import get_stock_screener, SYMBOL_TO_SECTOR
 from src.tools.growth_illustrator import get_hypothetical_growth
+from src.tools.asset_education import get_asset_education
 
 st.set_page_config(
     page_title="Agentic Investment Research Assistant",
     page_icon="📊",
     layout="wide",
 )
+
+# ---------------------------------------------------------------------------
+# Custom styling — gradient hero header, polished cards, smoother tabs
+# ---------------------------------------------------------------------------
+st.markdown("""
+<style>
+    /* Import a cleaner font */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+
+    /* Gradient hero banner replacing the plain title */
+    .hero-banner {
+        background: linear-gradient(120deg, #5B2EDB 0%, #E8348B 55%, #F5A623 100%);
+        padding: 2rem 2.2rem;
+        border-radius: 18px;
+        margin-bottom: 1.2rem;
+        box-shadow: 0 8px 24px rgba(91, 46, 219, 0.25);
+    }
+    .hero-banner h1 {
+        color: white;
+        font-weight: 800;
+        font-size: 2.1rem;
+        margin: 0 0 0.4rem 0;
+    }
+    .hero-banner p {
+        color: rgba(255,255,255,0.92);
+        font-size: 1.02rem;
+        margin: 0;
+    }
+
+    /* Metric cards get a subtle lift and shadow */
+    div[data-testid="stMetric"] {
+        background: linear-gradient(160deg, #ffffff 0%, #f7f5ff 100%);
+        border: 1px solid #ece7fa;
+        border-radius: 14px;
+        padding: 0.9rem 1rem;
+        box-shadow: 0 2px 8px rgba(91, 46, 219, 0.07);
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    div[data-testid="stMetric"]:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(91, 46, 219, 0.14);
+    }
+
+    /* Tabs — more breathing room, bolder active tab */
+    button[data-baseweb="tab"] {
+        font-weight: 600;
+        font-size: 0.95rem;
+    }
+    button[data-baseweb="tab"][aria-selected="true"] {
+        color: #5B2EDB !important;
+    }
+    div[data-baseweb="tab-highlight"] {
+        background-color: #5B2EDB !important;
+        height: 3px !important;
+    }
+
+    /* Buttons — gradient primary action buttons */
+    .stButton > button {
+        border-radius: 10px;
+        font-weight: 600;
+        border: none;
+        transition: transform 0.12s ease;
+    }
+    .stButton > button:hover {
+        transform: translateY(-1px);
+    }
+    .stButton > button[kind="primary"] {
+        background: linear-gradient(120deg, #5B2EDB, #E8348B);
+        color: white;
+    }
+
+    /* Expanders — softer, card-like */
+    div[data-testid="stExpander"] {
+        border-radius: 12px;
+        border: 1px solid #ece7fa;
+    }
+
+    /* Sidebar polish */
+    section[data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #fbfaff 0%, #f5f3ff 100%);
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # Sidebar: client selector
@@ -89,11 +174,13 @@ if st.sidebar.button("🗑️ Clear conversation"):
 # ---------------------------------------------------------------------------
 # Main area: title + tabs
 # ---------------------------------------------------------------------------
-st.title("Agentic Investment Research Assistant")
-st.caption(
-    "Ask a natural-language question — the agent decides which tool(s) to call, "
-    "pulls real portfolio data, and remembers context across the conversation."
-)
+st.markdown(f"""
+<div class="hero-banner">
+    <h1>📊 Agentic Investment Research Assistant</h1>
+    <p>Ask a natural-language question — the agent decides which tool(s) to call, pulls real
+    portfolio data, and remembers context across the conversation.</p>
+</div>
+""", unsafe_allow_html=True)
 st.caption(f"Currently viewing: **{selected_label}**")
 
 with st.expander("ℹ️ How this works (architecture)"):
@@ -454,7 +541,7 @@ with tab_investor:
             "Past performance by real calendar year — shown as-is, NOT a forecast of future returns."
         )
 
-        example_tickers = ["TCS.NS", "INFY.NS", "RELIANCE.NS", "HDFCBANK.NS", "TATAMOTORS.NS", "SUNPHARMA.NS"]
+        example_tickers = ["TCS.NS", "INFY.NS", "RELIANCE.NS", "HDFCBANK.NS", "HEROMOTOCO.NS", "SUNPHARMA.NS"]
         hist_col1, hist_col2 = st.columns([2, 1])
         selected_ticker = hist_col1.selectbox("Choose a stock to view its historical performance", example_tickers)
         hist_chart_type = hist_col2.radio("Chart type", ["Bar", "Line"], horizontal=True, key="hist_chart_type")
@@ -723,7 +810,7 @@ with tab_screener:
             if not screener_df.empty:
                 screener_df["tags"] = screener_df["tags"].apply(lambda t: ", ".join(t) if t else "—")
                 display_cols = ["symbol", "sector", "company_name", "current_price",
-                                 "pct_from_52wk_high", "pe_ratio", "earnings_growth_pct", "tags", "reason"]
+                                 "pct_of_52wk_high", "pe_ratio", "earnings_growth_pct", "tags", "reason"]
                 display_cols = [c for c in display_cols if c in screener_df.columns]
                 st.dataframe(screener_df[display_cols], use_container_width=True, hide_index=True)
             else:
@@ -731,7 +818,32 @@ with tab_screener:
 
             st.caption(f"ℹ️ {screener_result['disclaimer']}")
 
-        # --- Hypothetical Growth Illustrator (honest reframe of "future prediction") ---
+        # --- The complete picture: stocks aren't the whole story ---
+        st.markdown("---")
+        st.markdown("### The Complete Picture: Beyond Stocks")
+        st.caption(
+            "A few stock ideas above, plus what every self-service investor should "
+            "also know about safer instruments — general education, not advice tied "
+            "to any specific product."
+        )
+
+        education = get_asset_education()
+        edu_cols = st.columns(4)
+        edu_icons = {"Fixed Deposit (FD)": "🏦", "Recurring Deposit (RD)": "🔄",
+                     "Emergency Fund": "🛟", "Cash": "💵"}
+
+        for i, (asset_name, content) in enumerate(education.items()):
+            with edu_cols[i % 4]:
+                st.markdown(f"#### {edu_icons.get(asset_name, '💰')} {asset_name}")
+                st.caption(content["what_it_is"])
+                with st.expander("Benefits"):
+                    for b in content["benefits"]:
+                        st.markdown(f"- {b}")
+                with st.expander("Tradeoffs"):
+                    for t in content["tradeoffs"]:
+                        st.markdown(f"- {t}")
+
+
         st.markdown("---")
         st.markdown("### Hypothetical Growth Illustrator")
         st.warning(
@@ -743,7 +855,7 @@ with tab_screener:
 
         illus_col1, illus_col2, illus_col3, illus_col4 = st.columns(4)
         illus_symbol = illus_col1.selectbox(
-            "Stock", ["TCS.NS", "INFY.NS", "RELIANCE.NS", "HDFCBANK.NS", "TATAMOTORS.NS", "SUNPHARMA.NS"],
+            "Stock", ["TCS.NS", "INFY.NS", "RELIANCE.NS", "HDFCBANK.NS", "HEROMOTOCO.NS", "SUNPHARMA.NS"],
             key="illustrator_symbol",
         )
         illus_amount = illus_col2.number_input("Hypothetical amount (₹)", min_value=1000, value=100000, step=1000)
