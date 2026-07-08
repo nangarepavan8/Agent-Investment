@@ -452,6 +452,55 @@ def run_agent(user_query: str, client_id: str = None, verbose: bool = True) -> d
     }
 
 
+SECTOR_SUGGESTION_PROMPT = """You are writing sector-wise stock commentary for a
+self-service investor, based ONLY on the real, current market data provided below.
+
+STRICT RULES:
+- Every claim must come from the data given — never invent a number, trend, or fact.
+- NEVER predict future prices or performance. NEVER say a stock "will" go up, "will
+  perform well," or is a "can't-miss" pick. This is a snapshot of TODAY's real data only.
+- For each sector, write 2-3 sentences: name the sector, name the specific real stocks
+  in it from the data, and state which current data point stood out for each (near
+  52-week high / low P/E / strong earnings growth) — using the tags and reasons given.
+- End with one sentence reminding the reader this is a current data snapshot, not
+  investment advice or a forecast.
+- Keep it factual, neutral, and readable — no hype language.
+
+REAL DATA (grouped by sector):
+{data_json}
+
+Write the sector-wise commentary now, one short paragraph per sector."""
+
+
+def generate_sector_wise_suggestions(sector_grouped_data: dict) -> str:
+    """
+    Generate an AI narrative, organized by sector, summarizing REAL
+    current screener data — explicitly not a prediction. Calls the LLM
+    once with the real data already provided (no tool-calling needed,
+    since the data is pre-fetched), so this is pure synthesis of real
+    numbers into readable prose.
+
+    Args:
+        sector_grouped_data: output of get_stock_screener_by_sector()
+
+    Returns:
+        AI-written narrative text (str)
+    """
+    if not sector_grouped_data.get("sectors"):
+        return (
+            "No sectors currently have stocks crossing a positive data threshold "
+            "(near 52-week high, low P/E, or strong earnings growth). This reflects "
+            "real current market conditions — try again later."
+        )
+
+    llm = ChatOpenAI(model=OPENAI_MODEL, api_key=OPENAI_API_KEY, temperature=0.3)
+    prompt = SECTOR_SUGGESTION_PROMPT.format(
+        data_json=json.dumps(sector_grouped_data["sectors"], indent=2)
+    )
+    response = llm.invoke([HumanMessage(content=prompt)])
+    return response.content
+
+
 if __name__ == "__main__":
     # Quick manual test - run: python -m src.agent
     # This demonstrates memory: the second query references "it" from the

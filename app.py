@@ -12,7 +12,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 
-from src.agent import run_agent
+from src.agent import run_agent, generate_sector_wise_suggestions
 from src.tools.data_loader import load_clients
 from src.tools.portfolio_summary import get_portfolio_summary
 from src.tools.risk_score import calc_risk_score
@@ -21,7 +21,7 @@ from src.audit_log import log_event, load_audit_log
 from src.tools.investor_guidance import get_investment_guidance, VALID_GOALS, VALID_HORIZONS
 from src.tools.historical_performance import get_historical_returns, get_price_history_series
 from src.tools.sector_performance import get_sector_performance, NIFTY_SECTOR_INDICES
-from src.tools.stock_screener import get_stock_screener, SYMBOL_TO_SECTOR
+from src.tools.stock_screener import get_stock_screener, get_stock_screener_by_sector, SYMBOL_TO_SECTOR
 from src.tools.growth_illustrator import get_hypothetical_growth
 from src.tools.asset_education import get_asset_education
 
@@ -533,6 +533,38 @@ with tab_investor:
                 st.markdown(f"- {factor}")
 
         st.info(f"ℹ️ {guidance['disclaimer']}")
+
+        # --- AI Stock Suggestions by Sector (real data, AI-narrated) ---
+        st.markdown("---")
+        st.markdown("### 🤖 AI Stock Suggestions by Sector")
+        st.warning(
+            "⚠️ This is an AI-written summary of REAL, CURRENT market data (52-week "
+            "high proximity, P/E, earnings growth) — organized by sector for your "
+            "risk category. It is NOT a prediction of future performance."
+        )
+
+        if st.button("Get AI Sector-Wise Suggestions", use_container_width=True):
+            with st.spinner("Screening real market data across all sectors..."):
+                sector_data = get_stock_screener_by_sector(guidance["risk_category"])
+            with st.spinner("Generating AI summary from real data..."):
+                narrative = generate_sector_wise_suggestions(sector_data)
+            st.session_state.sector_suggestions_narrative = narrative
+            st.session_state.sector_suggestions_raw = sector_data
+            log_event("sector_suggestions_generated", None, {"risk_category": guidance["risk_category"]})
+
+        if "sector_suggestions_narrative" in st.session_state:
+            st.markdown(st.session_state.sector_suggestions_narrative)
+            with st.expander("📊 View the real underlying data used above"):
+                raw = st.session_state.sector_suggestions_raw
+                for sector, stocks in raw.get("sectors", {}).items():
+                    st.markdown(f"**{sector}**")
+                    sector_stocks_df = pd.DataFrame(stocks)
+                    if not sector_stocks_df.empty:
+                        sector_stocks_df["tags"] = sector_stocks_df["tags"].apply(
+                            lambda t: ", ".join(t) if t else "—"
+                        )
+                        st.dataframe(sector_stocks_df, use_container_width=True, hide_index=True)
+            st.caption(f"ℹ️ {raw.get('disclaimer', '')}")
 
         # --- Historical performance lookback (real data, not a prediction) ---
         st.markdown("---")

@@ -179,6 +179,38 @@ def get_stock_screener(risk_category: str = "Moderate", limit: int = 10,
     }
 
 
+def get_stock_screener_by_sector(risk_category: str = "Moderate") -> Dict[str, Any]:
+    """
+    Run the screener across the FULL universe (all sectors) and group
+    results by sector — used to feed a sector-organized AI narrative.
+    Only includes stocks with at least one genuine positive signal
+    (same real-data-only filter as get_stock_screener).
+
+    Returns:
+        dict with risk_category, sectors (dict of sector -> list of
+        screened stocks in that sector), disclaimer
+    """
+    full_result = get_stock_screener(risk_category, limit=len(SCREENER_UNIVERSE), require_positive_signal=True)
+
+    if "error" in full_result or not full_result.get("results"):
+        return {
+            "risk_category": risk_category,
+            "sectors": {},
+            "disclaimer": full_result.get("disclaimer", "No data available right now."),
+        }
+
+    sectors: Dict[str, list] = {}
+    for stock in full_result["results"]:
+        sectors.setdefault(stock["sector"], []).append(stock)
+
+    return {
+        "risk_category": risk_category,
+        "sectors": sectors,
+        "disclaimer": full_result["disclaimer"],
+    }
+
+
 if __name__ == "__main__":
     import json
     print(json.dumps(get_stock_screener("Aggressive", limit=5), indent=2))
+    print(json.dumps(get_stock_screener_by_sector("Moderate"), indent=2))

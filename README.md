@@ -864,6 +864,41 @@ python -m src.tools.asset_education
 streamlit run app.py
 ```
 
+## Stretch Features, Round 15: AI Sector-Wise Stock Suggestions
+
+**Same honest framing, new delivery format:** the request was for "AI
+stock suggestions, sector-wise, for future investment." Built the
+honest version: an AI-written narrative, organized by sector, built
+strictly from REAL current screener data (52-week high proximity,
+P/E, earnings growth) — never a future prediction, and the system
+prompt fed to the LLM explicitly forbids "will perform well" type
+language.
+
+**How it works:**
+1. `get_stock_screener_by_sector()` (`src/tools/stock_screener.py`)
+   runs the existing real-data screener across ALL sectors, filtered
+   to genuine positive signals, grouped by sector
+2. `generate_sector_wise_suggestions()` (`src/agent.py`) feeds that
+   real data to GPT-4o with strict rules: every claim must come from
+   the data given, never invent a number, never predict future
+   performance — and asks it to write 2-3 sentences per sector naming
+   the real stocks and what stood out about each
+3. New **"🤖 AI Stock Suggestions by Sector"** section in the "For
+   Investors" tab, using the investor's own risk category from their
+   guidance — with the raw underlying real data viewable in an
+   expander for full transparency
+
+Test it:
+```bash
+python -m src.tools.stock_screener   # confirms get_stock_screener_by_sector
+streamlit run app.py
+```
+Generate guidance in "For Investors," then click "Get AI Sector-Wise
+Suggestions" — check the narrative reads factually (which sectors,
+which real stocks, which real data point stood out) with no
+forward-looking claims, and expand "View the real underlying data" to
+confirm it matches.
+
 ## Roadmap
 
 | Day | Milestone |
@@ -892,5 +927,6 @@ streamlit run app.py
 | Stretch 12 | Screener depth (reasons, sectors, chat), growth illustrator, data-driven alerts, dashboard fix ✅ |
 | Stretch 13 | Real calendar years + monthly/weekly granularity + bar/line/pie chart toggles ✅ |
 | Stretch 14 | Positive-framed metrics, asset education panel, full visual redesign ✅ |
+| Stretch 15 | AI sector-wise stock suggestions (real data, GPT-4o narrated) ✅ |
 
 🎉 **Build complete.** See `DEMO_SCRIPT.md` for your presentation guide.
