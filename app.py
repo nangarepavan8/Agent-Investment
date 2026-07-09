@@ -573,19 +573,41 @@ with tab_investor:
             "Past performance by real calendar year — shown as-is, NOT a forecast of future returns."
         )
 
-        example_tickers = ["TCS.NS", "INFY.NS", "RELIANCE.NS", "HDFCBANK.NS", "HEROMOTOCO.NS", "SUNPHARMA.NS"]
+        if "hist_search_symbol" not in st.session_state:
+            st.session_state.hist_search_symbol = "TCS.NS"
+
         hist_col1, hist_col2 = st.columns([2, 1])
-        selected_ticker = hist_col1.selectbox("Choose a stock to view its historical performance", example_tickers)
+        selected_ticker = hist_col1.text_input(
+            "Search any stock (e.g. TCS, INFY, RELIANCE, WIPRO — Indian exchange suffix auto-detected)",
+            value=st.session_state.hist_search_symbol,
+            key="hist_search_input",
+        ).strip()
         hist_chart_type = hist_col2.radio("Chart type", ["Bar", "Line"], horizontal=True, key="hist_chart_type")
 
+        st.caption("Quick picks:")
+        quick_pick_cols = st.columns(6)
+        quick_picks = ["TCS.NS", "INFY.NS", "RELIANCE.NS", "HDFCBANK.NS", "HEROMOTOCO.NS", "SUNPHARMA.NS"]
+        for i, qp in enumerate(quick_picks):
+            if quick_pick_cols[i].button(qp, key=f"quickpick_{qp}", use_container_width=True):
+                st.session_state.hist_search_symbol = qp
+                st.rerun()
+
         if st.button("Show Historical Performance"):
-            with st.spinner("Fetching real historical data..."):
+            with st.spinner(f"Fetching real historical data for '{selected_ticker}'..."):
                 hist_result = get_historical_returns(selected_ticker)
 
             if "error" in hist_result:
                 st.warning(f"⚠️ {hist_result['error']}")
             else:
-                st.caption(f"Current price: ₹{hist_result['current_price']:,.2f} (as of {hist_result['as_of_date']})")
+                resolved_note = (
+                    f" (resolved to {hist_result['resolved_symbol']})"
+                    if hist_result.get("resolved_symbol") and hist_result["resolved_symbol"] != selected_ticker
+                    else ""
+                )
+                st.caption(
+                    f"Current price: ₹{hist_result['current_price']:,.2f}{resolved_note} "
+                    f"(as of {hist_result['as_of_date']})"
+                )
                 # Sort so years appear oldest-to-newest, left-to-right
                 sorted_years = sorted(hist_result["returns"].keys())
                 bar_labels = sorted_years

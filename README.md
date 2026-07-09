@@ -899,6 +899,30 @@ which real stocks, which real data point stood out) with no
 forward-looking claims, and expand "View the real underlying data" to
 confirm it matches.
 
+## Stretch Features, Round 16: Stock Search Box for Historical Performance
+
+**"Historical Performance Lookback" now accepts ANY stock, not just a
+fixed dropdown of 6 examples.** Type a symbol (e.g. "TCS", "WIPRO",
+"RELIANCE") and it auto-resolves the Indian exchange suffix (.NS/.BO)
+if omitted — same smart resolution logic as `market_context_tool`.
+Quick-pick buttons remain below the search box for convenience, but
+any real stock can be searched directly.
+
+**What changed:** `src/tools/historical_performance.py` gained a
+`_resolve_symbol()` helper (tries the symbol as given, then `.NS`,
+then `.BO`), used by both `get_historical_returns()` and
+`get_price_history_series()`. The result now includes
+`resolved_symbol` so the UI can show "resolved to TCS.NS" if you typed
+just "TCS".
+
+Test it:
+```bash
+python -c "from src.tools.historical_performance import get_historical_returns; print(get_historical_returns('WIPRO'))"
+streamlit run app.py
+```
+Open "For Investors" → Historical Performance Lookback → type any
+symbol (with or without `.NS`) → Show Historical Performance.
+
 ## Roadmap
 
 | Day | Milestone |
@@ -928,5 +952,6 @@ confirm it matches.
 | Stretch 13 | Real calendar years + monthly/weekly granularity + bar/line/pie chart toggles ✅ |
 | Stretch 14 | Positive-framed metrics, asset education panel, full visual redesign ✅ |
 | Stretch 15 | AI sector-wise stock suggestions (real data, GPT-4o narrated) ✅ |
+| Stretch 16 | Stock search box with auto-resolved Indian ticker suffixes ✅ |
 
 🎉 **Build complete.** See `DEMO_SCRIPT.md` for your presentation guide.

@@ -22,6 +22,28 @@ import pandas as pd
 TRADING_DAYS_PER_YEAR = 252
 
 
+def _resolve_symbol(symbol: str) -> str:
+    """
+    Try the symbol as given, then common Indian exchange suffixes
+    (.NS for NSE, .BO for BSE) — so a user can type "TCS" or "WIPRO"
+    without knowing the exact suffix. Returns the first symbol that
+    actually resolves to real price data; raises if none do.
+    """
+    symbol = symbol.strip().upper()
+    candidates = [symbol] if "." in symbol else [symbol, f"{symbol}.NS", f"{symbol}.BO"]
+
+    for candidate in candidates:
+        try:
+            ticker = yf.Ticker(candidate)
+            info = ticker.info
+            if info.get("currentPrice") or info.get("regularMarketPrice"):
+                return candidate
+        except Exception:
+            continue
+
+    raise ValueError(f"Could not find market data for '{symbol}' (also tried .NS/.BO for Indian exchanges).")
+
+
 def get_historical_returns(symbol: str) -> Dict[str, Any]:
     """
     Fetch real historical returns for a stock over 1, 2, and 3-year
@@ -29,14 +51,16 @@ def get_historical_returns(symbol: str) -> Dict[str, Any]:
     not "1_year").
 
     Args:
-        symbol: e.g. "TCS.NS", "RELIANCE.NS"
+        symbol: e.g. "TCS.NS", "RELIANCE.NS", or just "TCS"/"RELIANCE"
+                (Indian exchange suffix auto-resolved if omitted)
 
     Returns:
         dict with symbol, current_price, and returns keyed by the
         actual calendar year each lookback window started from
     """
     try:
-        ticker = yf.Ticker(symbol)
+        resolved_symbol = _resolve_symbol(symbol)
+        ticker = yf.Ticker(resolved_symbol)
         hist = ticker.history(period="3y")
 
         if hist.empty or len(hist) < 30:
@@ -67,6 +91,7 @@ def get_historical_returns(symbol: str) -> Dict[str, Any]:
 
         return {
             "symbol": symbol,
+            "resolved_symbol": resolved_symbol,
             "current_price": round(current_price, 2),
             "as_of_date": today.isoformat(),
             "returns": returns,
@@ -97,7 +122,8 @@ def get_price_history_series(symbol: str, granularity: str = "Monthly") -> Dict[
     settings = granularity_map.get(granularity, granularity_map["Monthly"])
 
     try:
-        ticker = yf.Ticker(symbol)
+        resolved_symbol = _resolve_symbol(symbol)
+        ticker = yf.Ticker(resolved_symbol)
         hist = ticker.history(period=settings["period"], interval=settings["interval"])
 
         if hist.empty:
@@ -108,6 +134,7 @@ def get_price_history_series(symbol: str, granularity: str = "Monthly") -> Dict[
 
         return {
             "symbol": symbol,
+            "resolved_symbol": resolved_symbol,
             "granularity": granularity,
             "dates": dates,
             "prices": prices,
