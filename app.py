@@ -25,6 +25,7 @@ from src.tools.stock_screener import get_stock_screener, get_stock_screener_by_s
 from src.tools.growth_illustrator import get_hypothetical_growth
 from src.tools.asset_education import get_asset_education
 from src.tools.goal_gap_analysis import calc_goal_gap
+from src.tools.tax_guidance import get_capital_gains_rules, get_tax_saving_instruments, CAPITAL_GAINS_RULES
 
 st.set_page_config(
     page_title="Agentic Investment Research Assistant",
@@ -61,7 +62,8 @@ def check_query_budget() -> bool:
     return True
 
 # ---------------------------------------------------------------------------
-# Custom styling — gradient hero header, polished cards, smoother tabs
+# Custom styling — TVS Next brand colors (navy + orange), gradient hero
+# header, polished cards, smoother tabs
 # ---------------------------------------------------------------------------
 st.markdown("""
 <style>
@@ -69,13 +71,13 @@ st.markdown("""
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
-    /* Gradient hero banner replacing the plain title */
+    /* Gradient hero banner — TVS Next navy-to-orange, replacing the plain title */
     .hero-banner {
-        background: linear-gradient(120deg, #5B2EDB 0%, #E8348B 55%, #F5A623 100%);
+        background: linear-gradient(120deg, #0B1F4D 0%, #16305C 55%, #F5821F 130%);
         padding: 2rem 2.2rem;
         border-radius: 18px;
         margin-bottom: 1.2rem;
-        box-shadow: 0 8px 24px rgba(91, 46, 219, 0.25);
+        box-shadow: 0 8px 24px rgba(11, 31, 77, 0.30);
     }
     .hero-banner h1 {
         color: white;
@@ -91,16 +93,16 @@ st.markdown("""
 
     /* Metric cards get a subtle lift and shadow */
     div[data-testid="stMetric"] {
-        background: linear-gradient(160deg, #ffffff 0%, #f7f5ff 100%);
-        border: 1px solid #ece7fa;
+        background: linear-gradient(160deg, #ffffff 0%, #f4f7fb 100%);
+        border: 1px solid #dde6f0;
         border-radius: 14px;
         padding: 0.9rem 1rem;
-        box-shadow: 0 2px 8px rgba(91, 46, 219, 0.07);
+        box-shadow: 0 2px 8px rgba(11, 31, 77, 0.08);
         transition: transform 0.15s ease, box-shadow 0.15s ease;
     }
     div[data-testid="stMetric"]:hover {
         transform: translateY(-2px);
-        box-shadow: 0 6px 16px rgba(91, 46, 219, 0.14);
+        box-shadow: 0 6px 16px rgba(11, 31, 77, 0.16);
     }
 
     /* Tabs — more breathing room, bolder active tab */
@@ -109,10 +111,10 @@ st.markdown("""
         font-size: 0.95rem;
     }
     button[data-baseweb="tab"][aria-selected="true"] {
-        color: #5B2EDB !important;
+        color: #0B1F4D !important;
     }
     div[data-baseweb="tab-highlight"] {
-        background-color: #5B2EDB !important;
+        background-color: #F5821F !important;
         height: 3px !important;
     }
 
@@ -127,19 +129,19 @@ st.markdown("""
         transform: translateY(-1px);
     }
     .stButton > button[kind="primary"] {
-        background: linear-gradient(120deg, #5B2EDB, #E8348B);
+        background: linear-gradient(120deg, #0B1F4D, #F5821F);
         color: white;
     }
 
     /* Expanders — softer, card-like */
     div[data-testid="stExpander"] {
         border-radius: 12px;
-        border: 1px solid #ece7fa;
+        border: 1px solid #dde6f0;
     }
 
     /* Sidebar polish */
     section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #fbfaff 0%, #f5f3ff 100%);
+        background: linear-gradient(180deg, #fafbfd 0%, #f0f4f9 100%);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -201,8 +203,10 @@ if st.sidebar.button("🗑️ Clear conversation"):
     st.rerun()
 
 # ---------------------------------------------------------------------------
-# Main area: title + tabs
+# Main area: company banner + title + tabs
 # ---------------------------------------------------------------------------
+st.image("assets/tvsnext_banner.jpg", use_container_width=True)
+
 st.markdown(f"""
 <div class="hero-banner">
     <h1>📊 Agentic Investment Research Assistant</h1>
@@ -248,8 +252,8 @@ with st.expander("ℹ️ How this works (architecture)"):
     Fabric, and Azure hosting for production, multi-user deployment.
     """)
 
-tab_chat, tab_dashboard, tab_alerts, tab_audit, tab_investor, tab_screener = st.tabs(
-    ["💬 Chat", "📊 Dashboard", "🔔 Portfolio Alerts", "📋 Audit Log", "🧑‍💼 For Investors", "🔎 Stock Screener"]
+tab_chat, tab_dashboard, tab_alerts, tab_audit, tab_investor, tab_screener, tab_tax = st.tabs(
+    ["💬 Chat", "📊 Dashboard", "🔔 Portfolio Alerts", "📋 Audit Log", "🧑‍💼 For Investors", "🔎 Stock Screener", "💰 Taxation"]
 )
 
 # ---------------------------------------------------------------------------
@@ -291,7 +295,7 @@ with tab_dashboard:
 
         chart_col, factors_col = st.columns([2, 1])
 
-        DONUT_COLORS = ["#5B2EDB", "#E8348B", "#F5A623", "#2ECC71", "#3498DB", "#E74C3C", "#95A5A6"]
+        DONUT_COLORS = ["#0B1F4D", "#F5821F", "#2E6DB4", "#2ECC71", "#7FA8D9", "#E74C3C", "#95A5A6"]
 
         def render_donut(data_dict, title):
             if not data_dict:
@@ -728,7 +732,7 @@ with tab_investor:
                 else:
                     hist_fig = go.Figure(data=[go.Scatter(
                         x=bar_labels, y=bar_values, mode="lines+markers+text",
-                        line=dict(color="#5B2EDB", width=3),
+                        line=dict(color="#0B1F4D", width=3),
                         marker=dict(size=10, color=bar_colors),
                         text=[f"{v:+.1f}%" for v in bar_values],
                         textposition="top center",
@@ -1137,3 +1141,107 @@ with tab_screener:
                 "output_tokens": output_tokens, "approx_cost_usd": approx_cost_usd,
             })
             st.rerun()
+
+# ---------------------------------------------------------------------------
+# TAXATION TAB - real, researched, dated tax rules (LTCG/STCG, Section 80C)
+# with a chat section for follow-up questions. NOT a live feed - clearly
+# labeled with a data_as_of date and a "verify with a CA" disclaimer,
+# consistent with this project's honesty-first philosophy.
+# ---------------------------------------------------------------------------
+with tab_tax:
+    st.subheader("💰 Taxation & Tax-Saving Guidance (India)")
+
+    cg_data = get_capital_gains_rules()
+    st.info(
+        f"ℹ️ Data as of: **{cg_data['data_as_of']}**. This is a researched, dated "
+        f"snapshot — NOT a live feed. {cg_data['disclaimer']}"
+    )
+
+    tax_col1, tax_col2 = st.columns(2)
+
+    with tax_col1:
+        st.markdown("### Capital Gains Tax Rules")
+        for asset_type, rules in CAPITAL_GAINS_RULES.items():
+            with st.expander(asset_type.replace("_", " ").title()):
+                if "short_term_stcg" in rules:
+                    st.markdown("**Short-Term (STCG)**")
+                    st.markdown(f"- Holding period: {rules['short_term_stcg']['holding_period']}")
+                    st.markdown(f"- Tax rate: {rules['short_term_stcg']['tax_rate']}")
+                if "long_term_ltcg" in rules:
+                    st.markdown("**Long-Term (LTCG)**")
+                    st.markdown(f"- Holding period: {rules['long_term_ltcg']['holding_period']}")
+                    st.markdown(f"- Tax rate: {rules['long_term_ltcg']['tax_rate']}")
+                    if "annual_exemption" in rules["long_term_ltcg"]:
+                        st.markdown(f"- Annual exemption: {rules['long_term_ltcg']['annual_exemption']}")
+                if "note" in rules:
+                    st.caption(f"ℹ️ {rules['note']}")
+
+    with tax_col2:
+        st.markdown("### Section 80C Tax-Saving Instruments")
+        ts_data = get_tax_saving_instruments()["section_80c"]
+        st.markdown(f"**Overall limit:** {ts_data['overall_limit']}")
+        st.markdown(f"**Available only under:** {ts_data['available_only_under']}")
+        st.markdown(
+            f"**Additional deduction ({ts_data['additional_deduction']['section']}):** "
+            f"{ts_data['additional_deduction']['amount']}"
+        )
+        st.markdown("---")
+        instruments_df = pd.DataFrame(ts_data["instruments"])
+        st.dataframe(instruments_df, use_container_width=True, hide_index=True)
+
+    # --- Tax chat section ---
+    st.markdown("---")
+    st.markdown("### Ask a Tax Question")
+    st.caption("e.g. \"How is ELSS taxed on exit?\", \"What's the LTCG rate on gold?\", \"How much can I save under 80C?\"")
+
+    if "tax_chat_messages" not in st.session_state:
+        st.session_state.tax_chat_messages = []
+
+    for msg in st.session_state.tax_chat_messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+            if msg["role"] == "assistant" and (msg.get("tool_calls") or msg.get("latency_seconds") is not None):
+                with st.expander("🧠 Reasoning"):
+                    for tc in msg.get("tool_calls", []):
+                        st.markdown(f"- Called `{tc['name']}` with `{tc['args']}`")
+                    if msg.get("latency_seconds") is not None:
+                        st.caption(
+                            f"⏱️ {msg['latency_seconds']}s · 🔢 {msg.get('input_tokens', 0)}+{msg.get('output_tokens', 0)} tokens "
+                            f"· 💵 ~${msg.get('approx_cost_usd', 0):.5f}"
+                        )
+
+    tax_question = st.chat_input("Ask about capital gains tax, 80C, ELSS, PPF...", key="tax_chat_input")
+
+    if tax_question:
+        st.session_state.tax_chat_messages.append({"role": "user", "content": tax_question})
+        with st.chat_message("user"):
+            st.markdown(tax_question)
+
+        if not check_query_budget():
+            st.stop()
+
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
+                try:
+                    result = run_agent(tax_question, client_id=None, verbose=False)
+                    answer = result["answer"]
+                    tool_calls = result["tool_calls"]
+                    latency_seconds = result.get("latency_seconds")
+                    input_tokens = result.get("input_tokens", 0)
+                    output_tokens = result.get("output_tokens", 0)
+                    approx_cost_usd = result.get("approx_cost_usd", 0)
+                except Exception as e:
+                    answer = f"⚠️ Something went wrong: {e}"
+                    tool_calls = []
+                    latency_seconds = None
+                    input_tokens = 0
+                    output_tokens = 0
+                    approx_cost_usd = 0
+            st.markdown(answer)
+
+        st.session_state.tax_chat_messages.append({
+            "role": "assistant", "content": answer, "tool_calls": tool_calls,
+            "latency_seconds": latency_seconds, "input_tokens": input_tokens,
+            "output_tokens": output_tokens, "approx_cost_usd": approx_cost_usd,
+        })
+        st.rerun()

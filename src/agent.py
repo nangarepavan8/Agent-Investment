@@ -29,6 +29,7 @@ from src.tools.historical_performance import get_historical_returns
 from src.tools.stock_screener import get_stock_screener
 from src.tools.growth_illustrator import get_hypothetical_growth
 from src.tools.goal_gap_analysis import calc_goal_gap
+from src.tools.tax_guidance import get_capital_gains_rules, get_tax_saving_instruments
 from src.memory import store_memory, retrieve_relevant_memory
 from src.audit_log import log_event
 
@@ -211,10 +212,43 @@ def goal_gap_analysis_tool(current_corpus: float, monthly_contribution: float,
         return json.dumps({"error": str(e)})
 
 
+@tool
+def capital_gains_tax_tool(asset_type: str = None) -> str:
+    """Get current REAL, RESEARCHED Indian capital gains tax rules
+    (LTCG/STCG rates and holding periods) for equity shares/mutual
+    funds, debt mutual funds, real estate, or gold/international funds.
+    This is a dated snapshot (clearly labeled), not a live feed — always
+    pass along the disclaimer to verify with a CA for time-sensitive
+    decisions. Use this when a user asks about capital gains tax,
+    LTCG/STCG rates, or how a specific asset type is taxed. asset_type
+    must be one of: equity_shares_and_equity_mutual_funds,
+    debt_mutual_funds, real_estate, gold_and_international_funds — or
+    omit it for all asset types."""
+    try:
+        return json.dumps(get_capital_gains_rules(asset_type))
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+@tool
+def tax_saving_instruments_tool() -> str:
+    """Get current REAL, RESEARCHED Section 80C tax-saving instrument
+    details (ELSS, PPF, EPF, NSC, tax-saver FDs, SSY, life insurance,
+    home loan principal, tuition fees) — the ₹1.5 lakh combined limit,
+    lock-in periods, and characteristics of each. This is a dated
+    snapshot (clearly labeled), not a live feed. Use this when a user
+    asks how to save tax, what to invest in for tax deduction, or
+    about Section 80C / ELSS / PPF specifically."""
+    try:
+        return json.dumps(get_tax_saving_instruments())
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
 ALL_TOOLS = [portfolio_summary_tool, risk_score_tool, rebalancing_tool, market_context_tool,
              profit_booking_tool, sector_performance_tool, investment_guidance_tool,
              historical_performance_tool, stock_screener_tool, growth_illustrator_tool,
-             goal_gap_analysis_tool]
+             goal_gap_analysis_tool, capital_gains_tax_tool, tax_saving_instruments_tool]
 
 TOOLS_BY_NAME = {t.name: t for t in ALL_TOOLS}
 
@@ -297,6 +331,15 @@ Before answering, silently work through:
   "am I on track for retirement/education/etc", "how much more should
   I save monthly". Always frame the return rate as an assumption for
   planning, never as a prediction.
+- **capital_gains_tax_tool** — REAL, RESEARCHED current Indian LTCG/
+  STCG capital gains tax rates and holding periods (equity, debt
+  funds, real estate, gold). This is a DATED SNAPSHOT, not live —
+  always pass along that tax rules change with each Union Budget and
+  should be verified with a CA for time-sensitive decisions.
+- **tax_saving_instruments_tool** — REAL, RESEARCHED current Section
+  80C tax-saving instrument details (ELSS, PPF, EPF, NSC, etc.), the
+  ₹1.5 lakh limit, and lock-in periods. Also a dated snapshot, same
+  verify-with-a-CA caveat applies.
 - **No tool** — general finance/investing education (e.g. "what is
   diversification", "how does compound interest work", "ETF vs mutual
   fund", "what is a P/E ratio", "how do FDs/RDs/bonds/gold work as
@@ -377,7 +420,11 @@ own age/amount/risk category instead.
   explicitly every time (e.g. "assuming a 10%/year average return for
   a Moderate risk profile") and never drop that qualifier — the gap
   and required SIP are correct MATH given that assumption, but the
-  assumption itself is not a guarantee."""
+  assumption itself is not a guarantee.
+- For capital_gains_tax_tool and tax_saving_instruments_tool results:
+  these are REAL rules but a DATED SNAPSHOT, not a live feed — always
+  mention the data_as_of date and the disclaimer about verifying with
+  a CA, since tax rules change with each Union Budget."""
 
 
 # Approximate per-token pricing (USD), used only for a rough cost estimate

@@ -53,6 +53,8 @@ EVAL_CASES = [
     (None, "Give me a stock screener for aggressive risk", ["stock_screener_tool"]),
     (None, "Show me a hypothetical growth illustration for TCS", ["growth_illustrator_tool"]),
     (None, "I have ₹5 lakhs saved and want ₹50 lakhs in 15 years, am I on track?", ["goal_gap_analysis_tool"]),
+    (None, "What's the LTCG tax rate on equity mutual funds?", ["capital_gains_tax_tool"]),
+    (None, "What are my Section 80C tax saving options?", ["tax_saving_instruments_tool"]),
 ]
 
 

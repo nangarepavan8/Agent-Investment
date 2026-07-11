@@ -1002,6 +1002,40 @@ python api_server.py    # then try curl with/without X-API-Key header
 streamlit run app.py
 ```
 
+## Stretch Features, Round 19: Taxation Tab + TVS Next Branding
+
+**1. Taxation & Tax-Saving Guidance** (`src/tools/tax_guidance.py`, new
+**"💰 Taxation"** tab) — real, researched Indian capital gains tax
+rules (LTCG/STCG for equity, debt funds, real estate, gold) and
+Section 80C tax-saving instruments (ELSS, PPF, EPF, NSC, etc.).
+
+**Important honesty note:** this is a **dated snapshot** (researched
+July 2026, reflecting Finance (No. 2) Act 2024 rules confirmed
+unchanged through Union Budget 2026), NOT a live feed. The deployed
+app (using OpenAI's API directly) doesn't have live web search built
+in — adding that would need a separate search API (Tavily, SerpAPI,
+Bing) as a new paid dependency. This snapshot approach avoids that
+cost while staying accurate and clearly dated, with an explicit
+disclaimer to verify with a CA for time-sensitive decisions — same
+honesty pattern as growth_illustrator and goal_gap_analysis. Includes
+its own chat section for follow-up tax questions.
+
+**2. TVS Next branding** — the actual TVS Next banner now appears at
+the top of the app (`assets/tvsnext_banner.jpg`), and the entire UI
+color theme was updated to TVS Next's real navy (#0B1F4D) + orange
+(#F5821F) brand colors, replacing the earlier placeholder purple/pink
+theme (which was never real branding, just an arbitrary earlier
+choice) — hero banner gradient, metric cards, tab highlights, buttons,
+and all donut/line charts.
+
+Test it:
+```bash
+python -m src.tools.tax_guidance
+streamlit run app.py
+```
+Check the new "💰 Taxation" tab, and confirm the TVS Next banner +
+navy/orange theme render correctly throughout.
+
 ## Roadmap
 
 | Day | Milestone |
@@ -1034,5 +1068,6 @@ streamlit run app.py
 | Stretch 16 | Stock search box with auto-resolved Indian ticker suffixes ✅ |
 | Stretch 17 | Cloud deployment fix — browser-impersonating yfinance session ✅ |
 | Stretch 18 | API auth, rate cap, cost/latency trace, Goal Gap Analysis ✅ |
+| Stretch 19 | Taxation tab (real, dated tax data) + TVS Next branding ✅ |
 
 🎉 **Build complete.** See `DEMO_SCRIPT.md` for your presentation guide.
