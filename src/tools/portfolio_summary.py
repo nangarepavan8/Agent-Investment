@@ -21,6 +21,7 @@ portfolio still renders correctly instead of the whole tool failing.
 """
 
 from typing import Dict, Any
+from src.tools.yf_session import get_yf_session
 import yfinance as yf
 from src.tools.data_loader import get_client_holdings, get_client_info, get_client_other_investments
 from src.tools.fixed_income import value_instrument
@@ -29,7 +30,7 @@ from src.tools.fixed_income import value_instrument
 def _get_live_price(symbol: str):
     """Fetch current price for one symbol. Returns None on any failure."""
     try:
-        ticker = yf.Ticker(symbol)
+        ticker = yf.Ticker(symbol, session=get_yf_session())
         info = ticker.info
         price = info.get("currentPrice") or info.get("regularMarketPrice")
         return float(price) if price else None

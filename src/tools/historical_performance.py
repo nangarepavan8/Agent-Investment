@@ -17,6 +17,7 @@ Approximates each year as 252 trading days (standard convention).
 from datetime import date
 from typing import Dict, Any
 import yfinance as yf
+from src.tools.yf_session import get_yf_session
 import pandas as pd
 
 TRADING_DAYS_PER_YEAR = 252
@@ -34,7 +35,7 @@ def _resolve_symbol(symbol: str) -> str:
 
     for candidate in candidates:
         try:
-            ticker = yf.Ticker(candidate)
+            ticker = yf.Ticker(candidate, session=get_yf_session())
             info = ticker.info
             if info.get("currentPrice") or info.get("regularMarketPrice"):
                 return candidate
@@ -60,7 +61,7 @@ def get_historical_returns(symbol: str) -> Dict[str, Any]:
     """
     try:
         resolved_symbol = _resolve_symbol(symbol)
-        ticker = yf.Ticker(resolved_symbol)
+        ticker = yf.Ticker(resolved_symbol, session=get_yf_session())
         hist = ticker.history(period="3y")
 
         if hist.empty or len(hist) < 30:
@@ -123,7 +124,7 @@ def get_price_history_series(symbol: str, granularity: str = "Monthly") -> Dict[
 
     try:
         resolved_symbol = _resolve_symbol(symbol)
-        ticker = yf.Ticker(resolved_symbol)
+        ticker = yf.Ticker(resolved_symbol, session=get_yf_session())
         hist = ticker.history(period=settings["period"], interval=settings["interval"])
 
         if hist.empty:

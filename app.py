@@ -24,12 +24,41 @@ from src.tools.sector_performance import get_sector_performance, NIFTY_SECTOR_IN
 from src.tools.stock_screener import get_stock_screener, get_stock_screener_by_sector, SYMBOL_TO_SECTOR
 from src.tools.growth_illustrator import get_hypothetical_growth
 from src.tools.asset_education import get_asset_education
+from src.tools.goal_gap_analysis import calc_goal_gap
 
 st.set_page_config(
     page_title="Agentic Investment Research Assistant",
     page_icon="📊",
     layout="wide",
 )
+
+# ---------------------------------------------------------------------------
+# Session-wide query cap — protects a live demo from a runaway OpenAI bill
+# or rate-limit if someone (e.g. a judge exploring on their own) spams the
+# chat. Applies across ALL chat surfaces (advisor chat, investor chat,
+# screener chat) combined, since they all hit the same OpenAI account.
+# ---------------------------------------------------------------------------
+MAX_QUERIES_PER_SESSION = 40
+
+
+def check_query_budget() -> bool:
+    """
+    Returns True if there's still budget left this session, and
+    increments the counter. Returns False (and shows a warning) if the
+    cap has been hit — the caller should skip running the agent.
+    """
+    if "session_query_count" not in st.session_state:
+        st.session_state.session_query_count = 0
+
+    if st.session_state.session_query_count >= MAX_QUERIES_PER_SESSION:
+        st.error(
+            f"⚠️ This session has reached its query limit ({MAX_QUERIES_PER_SESSION}) "
+            f"to protect against runaway API costs. Restart the app to reset."
+        )
+        return False
+
+    st.session_state.session_query_count += 1
+    return True
 
 # ---------------------------------------------------------------------------
 # Custom styling — gradient hero header, polished cards, smoother tabs
@@ -365,13 +394,18 @@ with tab_chat:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-            # Show the reasoning trace for assistant messages that used tools
-            if msg["role"] == "assistant" and msg.get("tool_calls"):
+            # Show the reasoning trace for assistant messages
+            if msg["role"] == "assistant" and (msg.get("tool_calls") or msg.get("latency_seconds") is not None):
                 with st.expander("🧠 Agent's reasoning"):
-                    for tc in msg["tool_calls"]:
+                    for tc in msg.get("tool_calls", []):
                         st.markdown(f"- Called `{tc['name']}` with `{tc['args']}`")
                     if msg.get("memory_hits"):
                         st.markdown(f"- Used {msg['memory_hits']} relevant memory item(s) from past conversation")
+                    if msg.get("latency_seconds") is not None:
+                        st.caption(
+                            f"⏱️ {msg['latency_seconds']}s · 🔢 {msg.get('input_tokens', 0)}+{msg.get('output_tokens', 0)} tokens "
+                            f"· 💵 ~${msg.get('approx_cost_usd', 0):.5f}"
+                        )
 
             # Human-in-the-loop: show approve/reject for rebalancing suggestions
             if msg["role"] == "assistant" and msg.get("requires_approval") and not msg.get("approval_decision"):
@@ -402,6 +436,9 @@ with tab_chat:
         with st.chat_message("user"):
             st.markdown(user_input)
 
+        if not check_query_budget():
+            st.stop()
+
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
                 try:
@@ -410,11 +447,19 @@ with tab_chat:
                     tool_calls = result["tool_calls"]
                     memory_hits = result["memory_hits"]
                     requires_approval = result["requires_approval"]
+                    latency_seconds = result.get("latency_seconds")
+                    input_tokens = result.get("input_tokens", 0)
+                    output_tokens = result.get("output_tokens", 0)
+                    approx_cost_usd = result.get("approx_cost_usd", 0)
                 except Exception as e:
                     answer = f"⚠️ Something went wrong: {e}"
                     tool_calls = []
                     memory_hits = 0
                     requires_approval = False
+                    latency_seconds = None
+                    input_tokens = 0
+                    output_tokens = 0
+                    approx_cost_usd = 0
             st.markdown(answer)
 
         st.session_state.messages.append({
@@ -423,6 +468,10 @@ with tab_chat:
             "tool_calls": tool_calls,
             "memory_hits": memory_hits,
             "requires_approval": requires_approval,
+            "latency_seconds": latency_seconds,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "approx_cost_usd": approx_cost_usd,
         })
         st.rerun()
 
@@ -544,13 +593,14 @@ with tab_investor:
         )
 
         if st.button("Get AI Sector-Wise Suggestions", use_container_width=True):
-            with st.spinner("Screening real market data across all sectors..."):
-                sector_data = get_stock_screener_by_sector(guidance["risk_category"])
-            with st.spinner("Generating AI summary from real data..."):
-                narrative = generate_sector_wise_suggestions(sector_data)
-            st.session_state.sector_suggestions_narrative = narrative
-            st.session_state.sector_suggestions_raw = sector_data
-            log_event("sector_suggestions_generated", None, {"risk_category": guidance["risk_category"]})
+            if check_query_budget():
+                with st.spinner("Screening real market data across all sectors..."):
+                    sector_data = get_stock_screener_by_sector(guidance["risk_category"])
+                with st.spinner("Generating AI summary from real data..."):
+                    narrative = generate_sector_wise_suggestions(sector_data)
+                st.session_state.sector_suggestions_narrative = narrative
+                st.session_state.sector_suggestions_raw = sector_data
+                log_event("sector_suggestions_generated", None, {"risk_category": guidance["risk_category"]})
 
         if "sector_suggestions_narrative" in st.session_state:
             st.markdown(st.session_state.sector_suggestions_narrative)
@@ -565,6 +615,60 @@ with tab_investor:
                         )
                         st.dataframe(sector_stocks_df, use_container_width=True, hide_index=True)
             st.caption(f"ℹ️ {raw.get('disclaimer', '')}")
+
+        # --- Goal Gap Analysis: "am I on track?" ---
+        st.markdown("---")
+        st.markdown("### 🎯 Goal Gap Analysis — Am I On Track?")
+        st.caption(
+            "Projects your current corpus + planned monthly savings forward using a "
+            "clearly-assumed average return for your risk category — NOT a prediction. "
+            "Shows whether you're on track, and if not, how much more to save monthly."
+        )
+
+        goal_col1, goal_col2, goal_col3 = st.columns(3)
+        goal_current_corpus = goal_col1.number_input(
+            "Amount already saved toward this goal (₹)", min_value=0, value=int(guidance["investment_amount"]), step=10000
+        )
+        goal_monthly_contribution = goal_col2.number_input(
+            "Planned monthly contribution (₹)", min_value=0, value=10000, step=1000
+        )
+        goal_target_amount = goal_col3.number_input(
+            "Target amount needed (₹)", min_value=1, value=5000000, step=100000
+        )
+        goal_years = st.slider("Years until goal", min_value=1, max_value=40, value=15)
+
+        if st.button("Check My Goal Gap", use_container_width=True):
+            gap_result = calc_goal_gap(
+                current_corpus=goal_current_corpus,
+                monthly_contribution=goal_monthly_contribution,
+                target_amount=goal_target_amount,
+                years=goal_years,
+                risk_category=guidance["risk_category"],
+            )
+            st.session_state.goal_gap_result = gap_result
+            log_event("goal_gap_checked", None, {"risk_category": guidance["risk_category"], "years": goal_years})
+
+        if "goal_gap_result" in st.session_state:
+            gap = st.session_state.goal_gap_result
+            g1, g2, g3 = st.columns(3)
+            g1.metric("Projected Corpus", f"₹{gap['projected_corpus']:,.0f}")
+            g2.metric("Target Amount", f"₹{gap['target_amount']:,.0f}")
+
+            if gap["is_shortfall"]:
+                g3.metric("Shortfall", f"₹{gap['gap']:,.0f}", delta="Behind", delta_color="inverse")
+                st.error(
+                    f"📉 Based on the assumption below, you're projected to fall short by "
+                    f"₹{gap['gap']:,.0f}. To close this gap, consider increasing your monthly "
+                    f"contribution by approximately **₹{gap['required_additional_monthly_sip']:,.0f}/month**."
+                )
+            else:
+                g3.metric("Surplus", f"₹{gap['gap']:,.0f}", delta="On track", delta_color="normal")
+                st.success(
+                    f"📈 Based on the assumption below, you're projected to exceed your target "
+                    f"by ₹{gap['gap']:,.0f} — currently on track."
+                )
+
+            st.warning(f"⚠️ {gap['disclaimer']}")
 
         # --- Historical performance lookback (real data, not a prediction) ---
         st.markdown("---")
@@ -773,10 +877,15 @@ with tab_investor:
         for msg in st.session_state.investor_chat_messages:
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
-                if msg["role"] == "assistant" and msg.get("tool_calls"):
+                if msg["role"] == "assistant" and (msg.get("tool_calls") or msg.get("latency_seconds") is not None):
                     with st.expander("🧠 Reasoning"):
-                        for tc in msg["tool_calls"]:
+                        for tc in msg.get("tool_calls", []):
                             st.markdown(f"- Called `{tc['name']}` with `{tc['args']}`")
+                        if msg.get("latency_seconds") is not None:
+                            st.caption(
+                                f"⏱️ {msg['latency_seconds']}s · 🔢 {msg.get('input_tokens', 0)}+{msg.get('output_tokens', 0)} tokens "
+                                f"· 💵 ~${msg.get('approx_cost_usd', 0):.5f}"
+                            )
 
         investor_question = st.chat_input(
             "e.g. Why low P/E stocks for me? How has TCS done over 3 years?",
@@ -787,6 +896,9 @@ with tab_investor:
             st.session_state.investor_chat_messages.append({"role": "user", "content": investor_question})
             with st.chat_message("user"):
                 st.markdown(investor_question)
+
+            if not check_query_budget():
+                st.stop()
 
             # Give the agent context about this investor's own guidance, so
             # "why did you suggest this for me" resolves without re-asking
@@ -802,13 +914,23 @@ with tab_investor:
                         result = run_agent(context_note, client_id=None, verbose=False)
                         answer = result["answer"]
                         tool_calls = result["tool_calls"]
+                        latency_seconds = result.get("latency_seconds")
+                        input_tokens = result.get("input_tokens", 0)
+                        output_tokens = result.get("output_tokens", 0)
+                        approx_cost_usd = result.get("approx_cost_usd", 0)
                     except Exception as e:
                         answer = f"⚠️ Something went wrong: {e}"
                         tool_calls = []
+                        latency_seconds = None
+                        input_tokens = 0
+                        output_tokens = 0
+                        approx_cost_usd = 0
                 st.markdown(answer)
 
             st.session_state.investor_chat_messages.append({
                 "role": "assistant", "content": answer, "tool_calls": tool_calls,
+                "latency_seconds": latency_seconds, "input_tokens": input_tokens,
+                "output_tokens": output_tokens, "approx_cost_usd": approx_cost_usd,
             })
             st.rerun()
 
@@ -967,10 +1089,15 @@ with tab_screener:
         for msg in st.session_state.screener_chat_messages:
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
-                if msg["role"] == "assistant" and msg.get("tool_calls"):
+                if msg["role"] == "assistant" and (msg.get("tool_calls") or msg.get("latency_seconds") is not None):
                     with st.expander("🧠 Reasoning"):
-                        for tc in msg["tool_calls"]:
+                        for tc in msg.get("tool_calls", []):
                             st.markdown(f"- Called `{tc['name']}` with `{tc['args']}`")
+                        if msg.get("latency_seconds") is not None:
+                            st.caption(
+                                f"⏱️ {msg['latency_seconds']}s · 🔢 {msg.get('input_tokens', 0)}+{msg.get('output_tokens', 0)} tokens "
+                                f"· 💵 ~${msg.get('approx_cost_usd', 0):.5f}"
+                            )
 
         screener_question = st.chat_input(
             "e.g. Why is TCS tagged Low P/E? How has it performed historically?",
@@ -982,18 +1109,31 @@ with tab_screener:
             with st.chat_message("user"):
                 st.markdown(screener_question)
 
+            if not check_query_budget():
+                st.stop()
+
             with st.chat_message("assistant"):
                 with st.spinner("Thinking..."):
                     try:
                         result = run_agent(screener_question, client_id=None, verbose=False)
                         answer = result["answer"]
                         tool_calls = result["tool_calls"]
+                        latency_seconds = result.get("latency_seconds")
+                        input_tokens = result.get("input_tokens", 0)
+                        output_tokens = result.get("output_tokens", 0)
+                        approx_cost_usd = result.get("approx_cost_usd", 0)
                     except Exception as e:
                         answer = f"⚠️ Something went wrong: {e}"
                         tool_calls = []
+                        latency_seconds = None
+                        input_tokens = 0
+                        output_tokens = 0
+                        approx_cost_usd = 0
                 st.markdown(answer)
 
             st.session_state.screener_chat_messages.append({
                 "role": "assistant", "content": answer, "tool_calls": tool_calls,
+                "latency_seconds": latency_seconds, "input_tokens": input_tokens,
+                "output_tokens": output_tokens, "approx_cost_usd": approx_cost_usd,
             })
             st.rerun()

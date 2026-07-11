@@ -18,13 +18,14 @@ consistent with how real financial tools and advisors operate.
 
 from typing import Dict, Any, Optional
 import yfinance as yf
+from src.tools.yf_session import get_yf_session
 
 
 def _try_fetch(symbol: str) -> Optional[dict]:
     """Attempt to fetch info for one exact symbol. Returns None if no
     usable price data comes back (doesn't raise)."""
     try:
-        ticker = yf.Ticker(symbol)
+        ticker = yf.Ticker(symbol, session=get_yf_session())
         info = ticker.info
         price = info.get("currentPrice") or info.get("regularMarketPrice")
         if price:

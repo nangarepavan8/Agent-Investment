@@ -626,14 +626,15 @@ python scripts/daily_valuation_snapshot.py
 1. Open Task Scheduler → Create Basic Task
 2. Name it "Daily Portfolio Snapshot", trigger: Daily, set your preferred time
 3. Action: "Start a program" →
-   - Program: `D:\Hackathon\Project\agentic-investment-assistant\agentic-investment-assistant\venv\Scripts\python.exe`
+   - Program: `<your-project-folder>\venv\Scripts\python.exe`
    - Arguments: `scripts\daily_valuation_snapshot.py`
-   - Start in: `D:\Hackathon\Project\agentic-investment-assistant\agentic-investment-assistant`
+   - Start in: `<your-project-folder>`
+   (replace `<your-project-folder>` with wherever you cloned this repo, e.g. `C:\Projects\agentic-investment-assistant`)
 4. Save — the Excel file now refreshes daily even if you never open the app
 
 **Option B — N8N (matches your hackathon's approved automation tool):**
 1. Run `python api_server.py` (keep it running, e.g. as a background service)
-2. In N8N: Schedule Trigger (daily) → HTTP Request node → `GET http://localhost:8000/snapshot`
+2. In N8N: Schedule Trigger (daily) → HTTP Request node → `GET http://localhost:8000/snapshot`, with header `X-API-Key: <your API_SERVER_KEY from .env>` (the endpoint now requires authentication — see Security section below)
 3. This regenerates the same Excel file via the API instead of a local scheduled script — useful if N8N is already your automation hub for other things (like the portfolio alert scan)
 
 Both options produce the exact same file — pick whichever fits how you're already managing this project.
@@ -923,6 +924,84 @@ streamlit run app.py
 Open "For Investors" → Historical Performance Lookback → type any
 symbol (with or without `.NS`) → Show Historical Performance.
 
+## Stretch Features, Round 17: Cloud Deployment Fix — Yahoo Finance Blocking
+
+**Root cause of "works locally, fails on Streamlit Cloud":** Yahoo
+Finance (which yfinance scrapes under the hood) increasingly blocks or
+rate-limits requests from cloud-hosting data-center IP ranges (AWS,
+GCP, Azure — including Streamlit Community Cloud), even for completely
+valid, liquid tickers like TCS.NS. This is a known yfinance/Yahoo
+Finance issue, not a bug in this codebase.
+
+**Fix:** `src/tools/yf_session.py` — a shared session using `curl_cffi`
+that impersonates a real Chrome browser's TLS fingerprint, which is
+the fix recommended by yfinance's own maintainers for exactly this
+symptom. Wired into every `yf.Ticker()` call across the project (7
+call sites across `portfolio_summary.py`, `stock_screener.py`,
+`market_context.py`, `historical_performance.py`,
+`sector_performance.py`) — all pass `session=get_yf_session()` now.
+
+Test it:
+```bash
+pip install -r requirements.txt   # picks up curl_cffi
+python -c "from src.tools.yf_session import get_yf_session; print(get_yf_session())"
+streamlit run app.py
+```
+Redeploy to Streamlit Cloud and try Historical Performance Lookback
+again — should now resolve real tickers correctly from the cloud.
+
+## Stretch Features, Round 18: External Review Fixes + Goal Gap Analysis
+
+Based on an external technical review, split into "fix regardless"
+items and the single highest-value enhancement recommended.
+
+**1. API authentication** (`api_server.py`) — every endpoint except
+the root health-check now requires a valid `X-API-Key` header via
+FastAPI's standard `Depends()` pattern. Tested end-to-end: no key →
+401, wrong key → 401, correct key → 200 with real data. Set
+`API_SERVER_KEY` in `.env` for a stable key (see `.env.example`); if
+unset, a temporary one is generated and printed to console each run.
+
+**2. Removed hardcoded local paths from README** — Windows Task
+Scheduler instructions now use a generic `<your-project-folder>`
+placeholder instead of a literal `D:\Hackathon\...` path.
+
+**3. Session-wide query rate cap** (`app.py`) — `MAX_QUERIES_PER_SESSION`
+(default 40) applied across ALL chat surfaces (advisor chat, investor
+chat, screener chat, AI sector suggestions) combined, since they share
+one OpenAI account. Protects a live demo from a runaway bill if
+someone spams the chat.
+
+**4. Cost/latency in the reasoning trace** — every agent response now
+tracks real latency (seconds) and token usage, with an approximate
+cost estimate (static pricing table for gpt-4o/gpt-4o-mini — not
+billing-accurate, but directionally useful: "this agent costs
+~$0.0004/query"). Shown in every "🧠 Reasoning" expander across all
+three chat surfaces. Verified the cost math and token-extraction logic
+directly against hand-calculated expected values.
+
+**5. Goal Gap Analysis** (`src/tools/goal_gap_analysis.py`, new
+**"🎯 Goal Gap Analysis"** section in "For Investors") — the reviewer's
+top-flagged gap: this project told users their current value and risk
+score, but never whether that's *enough* for their actual goal. This
+tool projects current corpus + planned monthly contributions forward
+using a clearly-assumed return rate (7%/10%/12% for Conservative/
+Moderate/Aggressive, based on historical asset-class averages — an
+assumption for planning, explicitly never framed as a prediction),
+compares to a target amount, and if there's a shortfall, calculates
+the exact additional monthly SIP needed to close it using the
+standard future-value-of-annuity formula. **Verified the math
+directly**: added the calculated required SIP back into a shortfall
+scenario and confirmed it closes the gap to within ₹0.23 on a ₹1 crore
+target.
+
+Test it:
+```bash
+python -m src.tools.goal_gap_analysis
+python api_server.py    # then try curl with/without X-API-Key header
+streamlit run app.py
+```
+
 ## Roadmap
 
 | Day | Milestone |
@@ -953,5 +1032,7 @@ symbol (with or without `.NS`) → Show Historical Performance.
 | Stretch 14 | Positive-framed metrics, asset education panel, full visual redesign ✅ |
 | Stretch 15 | AI sector-wise stock suggestions (real data, GPT-4o narrated) ✅ |
 | Stretch 16 | Stock search box with auto-resolved Indian ticker suffixes ✅ |
+| Stretch 17 | Cloud deployment fix — browser-impersonating yfinance session ✅ |
+| Stretch 18 | API auth, rate cap, cost/latency trace, Goal Gap Analysis ✅ |
 
 🎉 **Build complete.** See `DEMO_SCRIPT.md` for your presentation guide.

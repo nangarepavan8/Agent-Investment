@@ -12,6 +12,7 @@ invoke based on user intent, exactly like the hackathon brief asks for.
 """
 
 import json
+import time
 from langchain_openai import ChatOpenAI
 from langchain_core.tools import tool
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
@@ -27,6 +28,7 @@ from src.tools.investor_guidance import get_investment_guidance
 from src.tools.historical_performance import get_historical_returns
 from src.tools.stock_screener import get_stock_screener
 from src.tools.growth_illustrator import get_hypothetical_growth
+from src.tools.goal_gap_analysis import calc_goal_gap
 from src.memory import store_memory, retrieve_relevant_memory
 from src.audit_log import log_event
 
@@ -190,9 +192,29 @@ def growth_illustrator_tool(symbol: str, investment_amount: float, years: int = 
         return json.dumps({"error": str(e)})
 
 
+@tool
+def goal_gap_analysis_tool(current_corpus: float, monthly_contribution: float,
+                           target_amount: float, years: float, risk_category: str = "Moderate") -> str:
+    """Answer 'am I on track for my goal?' — projects current corpus
+    plus monthly contributions forward using a CLEARLY-ASSUMED average
+    annual return (based on historical asset-class averages for the
+    risk category, NOT a prediction), compares to a target amount, and
+    if there's a shortfall, calculates the additional monthly SIP
+    needed to close it exactly (standard financial-planning formula).
+    Use this when a user asks if they'll reach a specific goal amount,
+    whether they're on track, or how much more they need to save
+    monthly. risk_category must be Conservative, Moderate, or
+    Aggressive."""
+    try:
+        return json.dumps(calc_goal_gap(current_corpus, monthly_contribution, target_amount, years, risk_category))
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
 ALL_TOOLS = [portfolio_summary_tool, risk_score_tool, rebalancing_tool, market_context_tool,
              profit_booking_tool, sector_performance_tool, investment_guidance_tool,
-             historical_performance_tool, stock_screener_tool, growth_illustrator_tool]
+             historical_performance_tool, stock_screener_tool, growth_illustrator_tool,
+             goal_gap_analysis_tool]
 
 TOOLS_BY_NAME = {t.name: t for t in ALL_TOOLS}
 
@@ -268,6 +290,13 @@ Before answering, silently work through:
 - **growth_illustrator_tool** — HYPOTHETICAL year-by-year projection
   using a stock's real historical average return. Always present this
   as an illustration based on the past, never as a forecast or promise.
+- **goal_gap_analysis_tool** — projects current corpus + monthly
+  contributions forward using a CLEARLY-ASSUMED return rate to answer
+  "am I on track for my goal," showing any shortfall/surplus and the
+  additional monthly SIP needed. Use for "will I reach X amount",
+  "am I on track for retirement/education/etc", "how much more should
+  I save monthly". Always frame the return rate as an assumption for
+  planning, never as a prediction.
 - **No tool** — general finance/investing education (e.g. "what is
   diversification", "how does compound interest work", "ETF vs mutual
   fund", "what is a P/E ratio", "how do FDs/RDs/bonds/gold work as
@@ -343,7 +372,52 @@ own age/amount/risk category instead.
   hypothetical illustration based on past average returns, NOT a
   prediction — repeat this framing every time this tool's output is
   shown, never present the projected numbers as something that will
-  actually happen."""
+  actually happen.
+- For goal_gap_analysis_tool results: state the assumed return rate
+  explicitly every time (e.g. "assuming a 10%/year average return for
+  a Moderate risk profile") and never drop that qualifier — the gap
+  and required SIP are correct MATH given that assumption, but the
+  assumption itself is not a guarantee."""
+
+
+# Approximate per-token pricing (USD), used only for a rough cost estimate
+# shown in the reasoning trace — not billing-accurate, just directionally
+# useful for a finance-ops audience ("this agent costs ~$0.002/query").
+APPROX_PRICING_PER_1M_TOKENS = {
+    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+    "gpt-4o": {"input": 2.50, "output": 10.00},
+}
+
+
+def _estimate_cost_usd(model_name: str, input_tokens: int, output_tokens: int) -> float:
+    """Rough cost estimate based on a static pricing table — for display only."""
+    pricing = None
+    for key, rates in APPROX_PRICING_PER_1M_TOKENS.items():
+        if key in model_name:
+            pricing = rates
+            break
+    if not pricing:
+        return 0.0
+    return round((input_tokens * pricing["input"] + output_tokens * pricing["output"]) / 1_000_000, 6)
+
+
+def _extract_tokens(ai_message) -> tuple:
+    """
+    Pull input/output token counts from a LangChain AIMessage, handling
+    both the newer `usage_metadata` attribute and the older
+    `response_metadata['token_usage']` format. Returns (0, 0) if
+    neither is present rather than crashing — cost/latency tracking is
+    a nice-to-have, not something that should ever break a real answer.
+    """
+    usage = getattr(ai_message, "usage_metadata", None)
+    if usage:
+        return usage.get("input_tokens", 0), usage.get("output_tokens", 0)
+
+    token_usage = getattr(ai_message, "response_metadata", {}).get("token_usage", {})
+    if token_usage:
+        return token_usage.get("prompt_tokens", 0), token_usage.get("completion_tokens", 0)
+
+    return 0, 0
 
 
 def run_agent(user_query: str, client_id: str = None, verbose: bool = True) -> dict:
@@ -371,6 +445,10 @@ def run_agent(user_query: str, client_id: str = None, verbose: bool = True) -> d
     """
     llm = ChatOpenAI(model=OPENAI_MODEL, api_key=OPENAI_API_KEY, temperature=0)
     llm_with_tools = llm.bind_tools(ALL_TOOLS)
+
+    start_time = time.time()
+    total_input_tokens = 0
+    total_output_tokens = 0
 
     system_content = SYSTEM_PROMPT
     memory_hit_count = 0
@@ -412,6 +490,10 @@ def run_agent(user_query: str, client_id: str = None, verbose: bool = True) -> d
     ai_msg = llm_with_tools.invoke(messages)
     messages.append(ai_msg)
 
+    in_tok, out_tok = _extract_tokens(ai_msg)
+    total_input_tokens += in_tok
+    total_output_tokens += out_tok
+
     if not ai_msg.tool_calls:
         final_answer = ai_msg.content
     else:
@@ -440,15 +522,29 @@ def run_agent(user_query: str, client_id: str = None, verbose: bool = True) -> d
         final_response = llm_with_tools.invoke(messages)
         final_answer = final_response.content
 
+        in_tok, out_tok = _extract_tokens(final_response)
+        total_input_tokens += in_tok
+        total_output_tokens += out_tok
+
     # Store this exchange in memory for future turns with this client
     if client_id:
         store_memory(client_id, user_query, final_answer)
+
+    elapsed_seconds = round(time.time() - start_time, 2)
+    approx_cost_usd = _estimate_cost_usd(OPENAI_MODEL, total_input_tokens, total_output_tokens)
+
+    if verbose:
+        print(f"  ⏱️ {elapsed_seconds}s | 🔢 {total_input_tokens}+{total_output_tokens} tokens | 💵 ~${approx_cost_usd:.5f}")
 
     return {
         "answer": final_answer,
         "tool_calls": tool_trace,
         "memory_hits": memory_hit_count,
         "requires_approval": requires_approval,
+        "latency_seconds": elapsed_seconds,
+        "input_tokens": total_input_tokens,
+        "output_tokens": total_output_tokens,
+        "approx_cost_usd": approx_cost_usd,
     }
 
 

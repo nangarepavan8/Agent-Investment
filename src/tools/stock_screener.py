@@ -17,6 +17,7 @@ is not, and this tool does not do the latter.
 
 from typing import Dict, Any, List, Optional
 import yfinance as yf
+from src.tools.yf_session import get_yf_session
 
 # Fixed screening universe — same real NSE tickers used elsewhere in
 # this project, flattened across all sectors.
@@ -51,7 +52,7 @@ NEAR_52WK_HIGH_THRESHOLD_PCT = -5.0  # within 5% of 52-week high
 def _screen_one_stock(symbol: str) -> Optional[Dict[str, Any]]:
     """Fetch and tag real current data for one stock. Returns None on failure."""
     try:
-        ticker = yf.Ticker(symbol)
+        ticker = yf.Ticker(symbol, session=get_yf_session())
         info = ticker.info
 
         current_price = info.get("currentPrice") or info.get("regularMarketPrice")

@@ -12,6 +12,7 @@ sector is gracefully omitted rather than crashing the whole tool.
 
 from typing import Dict, Any
 import yfinance as yf
+from src.tools.yf_session import get_yf_session
 
 # Real Nifty sector index tickers (Yahoo Finance symbols)
 NIFTY_SECTOR_INDICES = {
@@ -29,7 +30,7 @@ NIFTY_SECTOR_INDICES = {
 def _get_index_change(ticker_symbol: str):
     """Fetch today's % change for one index. Returns None on any failure."""
     try:
-        ticker = yf.Ticker(ticker_symbol)
+        ticker = yf.Ticker(ticker_symbol, session=get_yf_session())
         info = ticker.info
         current = info.get("regularMarketPrice") or info.get("currentPrice")
         previous = info.get("previousClose")

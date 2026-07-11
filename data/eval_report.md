@@ -1,8 +1,8 @@
 # Agent Evaluation Report
 
-Generated: 2026-07-05T22:33:06
+Generated: 2026-07-11T09:18:03
 
-**Score: 13/16 passed (81.2%)**
+**Score: 16/21 passed (76.2%)**
 
 | Query | Client | Expected Tool(s) | Actual Tool(s) | Result |
 |---|---|---|---|---|
@@ -15,10 +15,15 @@ Generated: 2026-07-05T22:33:06
 | What's the portfolio summary and risk score? | CLIENT_005 | portfolio_summary_tool, risk_score_tool | portfolio_summary_tool, risk_score_tool | ✅ Pass |
 | Is this client's portfolio well diversified? | CLIENT_006 | risk_score_tool | portfolio_summary_tool | ❌ Fail |
 | What sectors is this client invested in? | CLIENT_007 | portfolio_summary_tool |  | ❌ Fail |
-| Should we reduce exposure to any sector? | CLIENT_001 | rebalancing_tool | portfolio_summary_tool, risk_score_tool | ❌ Fail |
+| Should we reduce exposure to any sector? | CLIENT_001 | rebalancing_tool | rebalancing_tool, risk_score_tool | ✅ Pass |
 | What's this portfolio worth right now? | CLIENT_002 | portfolio_summary_tool | portfolio_summary_tool | ✅ Pass |
 | Is this client up or down overall? | CLIENT_003 | portfolio_summary_tool | portfolio_summary_tool | ✅ Pass |
 | Which stocks should I book profit on? | CLIENT_001 | profit_booking_tool | profit_booking_tool | ✅ Pass |
 | Should I invest in TCS? | — | market_context_tool | market_context_tool | ✅ Pass |
 | What is diversification? | — |  |  | ✅ Pass |
 | How is the IT sector doing today? | — | sector_performance_tool | sector_performance_tool | ✅ Pass |
+| I'm 30 years old and want to invest ₹200000, what should my allocation be? | — | investment_guidance_tool |  | ❌ Fail |
+| How has TCS performed over the last 3 years? | — | historical_performance_tool | historical_performance_tool | ✅ Pass |
+| Give me a stock screener for aggressive risk | — | stock_screener_tool | stock_screener_tool | ✅ Pass |
+| Show me a hypothetical growth illustration for TCS | — | growth_illustrator_tool |  | ❌ Fail |
+| I have ₹5 lakhs saved and want ₹50 lakhs in 15 years, am I on track? | — | goal_gap_analysis_tool |  | ❌ Fail |

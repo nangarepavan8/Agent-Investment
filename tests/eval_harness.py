@@ -52,6 +52,7 @@ EVAL_CASES = [
     (None, "How has TCS performed over the last 3 years?", ["historical_performance_tool"]),
     (None, "Give me a stock screener for aggressive risk", ["stock_screener_tool"]),
     (None, "Show me a hypothetical growth illustration for TCS", ["growth_illustrator_tool"]),
+    (None, "I have ₹5 lakhs saved and want ₹50 lakhs in 15 years, am I on track?", ["goal_gap_analysis_tool"]),
 ]
 
 
