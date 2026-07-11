@@ -30,6 +30,7 @@ from src.tools.stock_screener import get_stock_screener
 from src.tools.growth_illustrator import get_hypothetical_growth
 from src.tools.goal_gap_analysis import calc_goal_gap
 from src.tools.tax_guidance import get_capital_gains_rules, get_tax_saving_instruments
+from src.tools.stress_test import run_stress_test, STRESS_SCENARIOS
 from src.memory import store_memory, retrieve_relevant_memory
 from src.audit_log import log_event
 
@@ -107,9 +108,15 @@ def profit_booking_tool(client_id: str) -> str:
     """Identify which of a client's holdings are candidates for booking
     profit (significant unrealized gains) or tax-loss harvesting
     (significant unrealized losses), based on REAL current market
-    prices vs. purchase price. Use this when the user asks which
-    stocks to sell, take profit on, or harvest losses from. client_id
-    must be in the format CLIENT_001 through CLIENT_010."""
+    prices vs. purchase price. NOW TAX-AWARE: for each candidate,
+    shows real holding-period-based STCG (20%) vs LTCG (12.5% above
+    ₹1.25L exemption) tax treatment, the tax if sold today, and — for
+    still-short-term gains — the potential tax saved by waiting for
+    long-term treatment. Loss candidates are flagged as STCL or LTCL
+    with what they can offset. Use this when the user asks which
+    stocks to sell, take profit on, or harvest losses from, or about
+    the tax impact of selling now vs. waiting. client_id must be in
+    the format CLIENT_001 through CLIENT_010."""
     try:
         return json.dumps(suggest_profit_booking(client_id))
     except Exception as e:
@@ -245,10 +252,29 @@ def tax_saving_instruments_tool() -> str:
         return json.dumps({"error": str(e)})
 
 
+@tool
+def stress_test_tool(client_id: str, scenario_name: str) -> str:
+    """Replay a REAL historical market drawdown (e.g. the 2020 COVID
+    crash or 2022 correction) against a client's ACTUAL CURRENT
+    holdings, using REAL historical prices for those same stocks —
+    this is a backward-looking illustration of "what if a similar
+    shock happened again," NEVER a prediction that it will. Use this
+    when a client/advisor asks "what if the market crashes", wants to
+    see how their portfolio would have handled a past crisis, or asks
+    about downside risk. scenario_name must be one of: "COVID Crash
+    (Feb-Mar 2020)" or "2022 Market Correction (Jan-Jun 2022)".
+    client_id must be in the format CLIENT_001 through CLIENT_010."""
+    try:
+        return json.dumps(run_stress_test(client_id, scenario_name))
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
 ALL_TOOLS = [portfolio_summary_tool, risk_score_tool, rebalancing_tool, market_context_tool,
              profit_booking_tool, sector_performance_tool, investment_guidance_tool,
              historical_performance_tool, stock_screener_tool, growth_illustrator_tool,
-             goal_gap_analysis_tool, capital_gains_tax_tool, tax_saving_instruments_tool]
+             goal_gap_analysis_tool, capital_gains_tax_tool, tax_saving_instruments_tool,
+             stress_test_tool]
 
 TOOLS_BY_NAME = {t.name: t for t in ALL_TOOLS}
 
@@ -340,6 +366,11 @@ Before answering, silently work through:
   80C tax-saving instrument details (ELSS, PPF, EPF, NSC, etc.), the
   ₹1.5 lakh limit, and lock-in periods. Also a dated snapshot, same
   verify-with-a-CA caveat applies.
+- **stress_test_tool** — replays a REAL historical market drawdown
+  (COVID 2020 crash, 2022 correction) against a client's ACTUAL
+  current holdings using real historical prices. Use for "what if the
+  market crashes" or downside-risk questions. This is backward-looking
+  ONLY — never present it as a prediction of a future crash.
 - **No tool** — general finance/investing education (e.g. "what is
   diversification", "how does compound interest work", "ETF vs mutual
   fund", "what is a P/E ratio", "how do FDs/RDs/bonds/gold work as
@@ -424,7 +455,11 @@ own age/amount/risk category instead.
 - For capital_gains_tax_tool and tax_saving_instruments_tool results:
   these are REAL rules but a DATED SNAPSHOT, not a live feed — always
   mention the data_as_of date and the disclaimer about verifying with
-  a CA, since tax rules change with each Union Budget."""
+  a CA, since tax rules change with each Union Budget.
+- For stress_test_tool results: always state this replays REAL past
+  events against current holdings and is NOT a prediction that a
+  similar crash will happen again — never imply the numbers shown
+  represent a forecast."""
 
 
 # Approximate per-token pricing (USD), used only for a rough cost estimate

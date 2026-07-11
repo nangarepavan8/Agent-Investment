@@ -1036,6 +1036,49 @@ streamlit run app.py
 Check the new "💰 Taxation" tab, and confirm the TVS Next banner +
 navy/orange theme render correctly throughout.
 
+## Stretch Features, Round 20: Tax-Aware Profit Booking + Historical Stress-Test
+
+Two enhancements that connect existing real data in new ways, rather
+than adding new fabricated capability — the most "agentic" kind of
+improvement (reasoning across data that already exists).
+
+**1. Tax-aware profit booking** (`src/tools/profit_booking.py`) —
+previously used arbitrary gain/loss thresholds only. Now connects two
+pieces of real data that existed separately: purchase dates (holding
+period) and researched LTCG/STCG tax rates (Round 19). For every
+profit-booking candidate, shows real STCG (20%) vs. LTCG (12.5% above
+₹1.25L) tax treatment based on ACTUAL holding period, the tax if sold
+today, and — if still short-term — the potential tax saved by waiting
+for long-term treatment. Loss candidates are flagged as STCL or LTCL
+with what they can legally offset. **Verified the tax math directly**
+against hand-calculated scenarios (both short-term and long-term
+cases matched exactly). Honestly flags the one real simplification:
+the ₹1.25L exemption is annual/aggregate, not per-holding — stated in
+every result.
+
+**2. Historical stress-test** (`src/tools/stress_test.py`, new section
+in Dashboard tab) — "what if the market crashes?" answered honestly:
+replays REAL historical price movements (2020 COVID crash, 2022
+correction) for a client's ACTUAL current stock holdings, using real
+historical data for those same tickers — applying the real % change
+to today's value. Zero prediction, purely backward-looking, same
+honesty pattern as `historical_performance.py` and
+`growth_illustrator.py`. Safe assets (FD/RD/Bonds/cash) assumed
+unaffected. **Verified the aggregation math**: confirmed stock total +
+safe assets = grand total exactly, and per-holding graceful
+degradation (falls back to "no change" if historical data is
+unavailable for a specific stock, clearly flagged) works correctly.
+
+Test it:
+```bash
+python -m src.tools.profit_booking
+python -m src.tools.stress_test
+streamlit run app.py
+```
+Check the Dashboard tab's new "📉 Historical Stress Test" section, and
+ask the chat "which stocks should I book profit on" to see the new
+tax-aware detail.
+
 ## Roadmap
 
 | Day | Milestone |
@@ -1069,5 +1112,6 @@ navy/orange theme render correctly throughout.
 | Stretch 17 | Cloud deployment fix — browser-impersonating yfinance session ✅ |
 | Stretch 18 | API auth, rate cap, cost/latency trace, Goal Gap Analysis ✅ |
 | Stretch 19 | Taxation tab (real, dated tax data) + TVS Next branding ✅ |
+| Stretch 20 | Tax-aware profit booking + historical stress-test ✅ |
 
 🎉 **Build complete.** See `DEMO_SCRIPT.md` for your presentation guide.

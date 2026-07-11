@@ -342,6 +342,48 @@ with tab_dashboard:
         else:
             st.caption("No FD/RD/Bond/government scheme holdings for this client.")
 
+        # --- Historical Stress Test: "what if the market crashes?" (honest, backward-looking) ---
+        st.markdown("---")
+        st.subheader("📉 Historical Stress Test")
+        st.caption(
+            "Replays a REAL past market drawdown against this client's ACTUAL current "
+            "holdings, using real historical prices — a backward-looking illustration, "
+            "NOT a prediction that a similar event will happen again."
+        )
+
+        scenario_choice = st.selectbox("Historical scenario", list(STRESS_SCENARIOS.keys()), key="stress_scenario")
+
+        if st.button("Run Stress Test", use_container_width=True):
+            with st.spinner("Fetching real historical prices for this scenario..."):
+                stress_result = run_stress_test(selected_client_id, scenario_choice)
+            st.session_state.stress_result = stress_result
+            log_event("stress_test_run", selected_client_id, {"scenario": scenario_choice})
+
+        if "stress_result" in st.session_state:
+            sr = st.session_state.stress_result
+            if "error" in sr:
+                st.warning(f"⚠️ {sr['error']}")
+            else:
+                s1, s2, s3 = st.columns(3)
+                s1.metric("Current Value", f"₹{sr['current_total_value']:,.0f}")
+                s2.metric("Stressed Value", f"₹{sr['stressed_total_value']:,.0f}")
+                s3.metric(
+                    "Drawdown", f"₹{sr['total_drawdown']:,.0f}",
+                    f"{sr['total_drawdown_pct']:+.2f}%", delta_color="inverse"
+                )
+                st.caption(
+                    f"Scenario period: {sr['scenario_period']} · Safe assets (FD/RD/Bonds/cash) of "
+                    f"₹{sr['safe_assets_unaffected']:,.0f} assumed unaffected."
+                )
+
+                holdings_stress_df = pd.DataFrame(sr["holding_results"])
+                st.dataframe(holdings_stress_df, use_container_width=True, hide_index=True)
+
+                if sr.get("any_missing_data"):
+                    st.caption("⚠️ Some holdings had no historical data available for this period and were assumed unchanged.")
+
+                st.error(f"⚠️ {sr['disclaimer']}")
+
     except Exception as e:
         st.error(f"Could not load dashboard: {e}")
 

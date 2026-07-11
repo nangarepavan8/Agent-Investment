@@ -55,6 +55,7 @@ EVAL_CASES = [
     (None, "I have ₹5 lakhs saved and want ₹50 lakhs in 15 years, am I on track?", ["goal_gap_analysis_tool"]),
     (None, "What's the LTCG tax rate on equity mutual funds?", ["capital_gains_tax_tool"]),
     (None, "What are my Section 80C tax saving options?", ["tax_saving_instruments_tool"]),
+    ("CLIENT_001", "What if the market crashes like COVID? How would my portfolio do?", ["stress_test_tool"]),
 ]
 
 
