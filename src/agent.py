@@ -34,6 +34,7 @@ from src.tools.tax_guidance import get_capital_gains_rules, get_tax_saving_instr
 from src.tools.stress_test import run_stress_test, STRESS_SCENARIOS
 from src.tools.swing_screener import get_swing_analysis, get_swing_screener_by_sector
 from src.tools.nse_live_data import get_nse_most_active_by_volume
+from src.tools.premarket_briefing import get_premarket_briefing
 from src.memory import store_memory, retrieve_relevant_memory
 from src.audit_log import log_event
 
@@ -325,12 +326,28 @@ def nse_live_volume_tool(count: int = 20) -> str:
         return json.dumps({"error": str(e)})
 
 
+@tool
+def premarket_briefing_tool() -> str:
+    """Get a REAL pre-market briefing: overnight US market performance
+    (Dow, Nasdaq, S&P 500), crude oil, USD/INR movement, and Nifty
+    50's last real close — factual, backward-looking data about what
+    already happened overnight, the same cues real financial
+    briefings cover before market open. This does NOT predict what
+    Indian markets or any stock will do today. Use this when a user
+    asks "what should I check before market opens", wants a pre-market
+    summary, or asks about overnight global cues."""
+    try:
+        return json.dumps(get_premarket_briefing())
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
 ALL_TOOLS = [portfolio_summary_tool, risk_score_tool, rebalancing_tool, market_context_tool,
              profit_booking_tool, sector_performance_tool, investment_guidance_tool,
              historical_performance_tool, stock_screener_tool, growth_illustrator_tool,
              goal_gap_analysis_tool, capital_gains_tax_tool, tax_saving_instruments_tool,
              stress_test_tool, swing_analysis_tool, swing_screener_by_sector_tool,
-             nse_live_volume_tool]
+             nse_live_volume_tool, premarket_briefing_tool]
 
 TOOLS_BY_NAME = {t.name: t for t in ALL_TOOLS}
 

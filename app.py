@@ -28,6 +28,7 @@ from src.tools.goal_gap_analysis import calc_goal_gap
 from src.tools.tax_guidance import get_capital_gains_rules, get_tax_saving_instruments, CAPITAL_GAINS_RULES
 from src.tools.swing_screener import get_swing_analysis, get_swing_screener_by_sector
 from src.tools.nse_live_data import get_nse_most_active_by_volume
+from src.tools.premarket_briefing import get_premarket_briefing
 
 st.set_page_config(
     page_title="Agentic Investment Research Assistant",
@@ -1323,6 +1324,33 @@ with tab_tax:
 # trading-signal generator.
 # ---------------------------------------------------------------------------
 with tab_swing:
+    # --- Pre-Market Briefing: real overnight global cues ---
+    st.markdown("### 🌅 Pre-Market Briefing")
+    st.caption(
+        "Real, factual overnight global cues — what already happened while India was "
+        "closed. This does NOT predict today's session or any specific stock."
+    )
+
+    if st.button("Get Pre-Market Briefing", use_container_width=True):
+        with st.spinner("Fetching real overnight global market data..."):
+            briefing = get_premarket_briefing()
+        st.session_state.premarket_briefing = briefing
+        log_event("premarket_briefing_fetched", None, {"data_fetched": briefing.get("data_fetched")})
+
+    if "premarket_briefing" in st.session_state:
+        pb = st.session_state.premarket_briefing
+        if pb["items"]:
+            pb_cols = st.columns(len(pb["items"]))
+            for i, (label, data) in enumerate(pb["items"].items()):
+                delta_color = "normal" if data["is_positive"] else "inverse"
+                pb_cols[i].metric(label, f"{data['level']:,.2f}", f"{data['change_pct']:+.2f}%", delta_color=delta_color)
+            if pb["data_fetched"] < pb["data_attempted"]:
+                st.caption(f"ℹ️ Fetched {pb['data_fetched']} of {pb['data_attempted']} — some overnight data was unavailable.")
+        else:
+            st.warning("⚠️ Could not fetch overnight global data right now — try again shortly.")
+        st.error(f"⚠️ {pb['disclaimer']}")
+
+    st.markdown("---")
     st.subheader("🔄 Swing Screener — Real Technical & Volume Data")
     st.error(
         "⚠️ **This is NOT a Buy/Sell signal, price target, or trading recommendation.** "

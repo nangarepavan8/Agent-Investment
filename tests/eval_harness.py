@@ -58,6 +58,7 @@ EVAL_CASES = [
     ("CLIENT_001", "What if the market crashes like COVID? How would my portfolio do?", ["stress_test_tool"]),
     (None, "Show me the technical indicators and volume for TCS", ["swing_analysis_tool"]),
     (None, "Give me a list of stocks with high volume near their highs, sector wise", ["swing_screener_by_sector_tool"]),
+    (None, "What should I check before market opens today?", ["premarket_briefing_tool"]),
 ]
 
 

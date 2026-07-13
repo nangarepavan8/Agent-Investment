@@ -1321,6 +1321,35 @@ Open "🔄 Swing" → search any stock → check "Today's Indicator
 Scoreboard" appears right after the price, with its disclaimer
 immediately visible, not buried below.
 
+## Stretch Features, Round 27: Pre-Market Briefing (Honest Overnight Cues)
+
+**Same line held one more time, in a new phrasing:** the request was
+for a list of stocks that "will boom tomorrow" before market open —
+a direct future prediction, declined for the same reason as every
+time before.
+
+**Built instead: the honest version of "what to check before market
+opens."** `src/tools/premarket_briefing.py` fetches REAL, factual,
+backward-looking overnight global cues — the same things real
+financial pre-market briefings cover: US market overnight performance
+(Dow, Nasdaq, S&P 500), crude oil overnight move, USD/INR overnight
+move, and Nifty 50's last real close. Every data point independently
+degrades gracefully if unavailable, so one failed fetch doesn't break
+the whole briefing. New **"🌅 Pre-Market Briefing"** section sits at
+the very top of the "🔄 Swing" tab — the first thing you'd check,
+appropriately placed first in the UI.
+
+This is explicitly a recap of what ALREADY happened overnight
+elsewhere — never a prediction of what Indian markets, any sector, or
+any specific stock will do today.
+
+Test it:
+```bash
+python -m src.tools.premarket_briefing
+streamlit run app.py
+```
+Open "🔄 Swing" → "Get Pre-Market Briefing" at the top of the tab.
+
 ## Roadmap
 
 | Day | Milestone |
@@ -1361,5 +1390,6 @@ immediately visible, not buried below.
 | Stretch 24 | Expanded universe (29→65 stocks) + RSI/Bollinger color gauges ✅ |
 | Stretch 25 | NSE live feed attempt (honest experimental result) + duplicate-code cleanup ✅ |
 | Stretch 26 | Today's Indicator Scoreboard — honest colored tally, not a Buy/Sell confidence score ✅ |
+| Stretch 27 | Pre-Market Briefing — real overnight global cues, not a "boom" prediction ✅ |
 
 🎉 **Build complete.** See `DEMO_SCRIPT.md` for your presentation guide.
