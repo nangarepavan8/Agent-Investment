@@ -13,6 +13,7 @@ invoke based on user intent, exactly like the hackathon brief asks for.
 
 import json
 import time
+from typing import Dict, Any
 from langchain_openai import ChatOpenAI
 from langchain_core.tools import tool
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
@@ -31,6 +32,7 @@ from src.tools.growth_illustrator import get_hypothetical_growth
 from src.tools.goal_gap_analysis import calc_goal_gap
 from src.tools.tax_guidance import get_capital_gains_rules, get_tax_saving_instruments
 from src.tools.stress_test import run_stress_test, STRESS_SCENARIOS
+from src.tools.swing_screener import get_swing_analysis, get_swing_screener_by_sector
 from src.memory import store_memory, retrieve_relevant_memory
 from src.audit_log import log_event
 
@@ -270,11 +272,45 @@ def stress_test_tool(client_id: str, scenario_name: str) -> str:
         return json.dumps({"error": str(e)})
 
 
+@tool
+def swing_analysis_tool(symbol: str) -> str:
+    """Get REAL, current technical indicators (RSI, MACD, EMA crossover,
+    Bollinger Bands, ATR, ADX), volume spike analysis, price-range
+    position, and recent news for a stock — for swing/short-term
+    analysis. This returns REAL CALCULATED DATA ONLY — it does NOT
+    provide a Buy/Sell signal, entry price, stop-loss, price target,
+    or confidence score, because short-term price direction cannot be
+    reliably predicted. Use this when a user asks for technical
+    analysis, volume spikes, swing trading data, or "is this stock
+    showing unusual activity" for a specific stock."""
+    try:
+        return json.dumps(get_swing_analysis(symbol))
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+@tool
+def swing_screener_by_sector_tool(min_flags: int = 1) -> str:
+    """Scan the FULL real stock universe (~29 Indian stocks) for ones
+    currently showing high volume and/or proximity to their 20-day
+    high, grouped by sector, WITH their real technical indicators
+    (RSI, ADX, volume spike ratio). Purely factual "what's happening
+    today" flags — NOT a breakout prediction, NOT a Buy/Sell signal,
+    NOT a price target. Use this when a user asks for a list/screener
+    of stocks with high volume, near their highs, or a sector-wise
+    swing/technical scan — as opposed to swing_analysis_tool which
+    covers just ONE specific stock in more depth."""
+    try:
+        return json.dumps(get_swing_screener_by_sector(min_flags))
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
 ALL_TOOLS = [portfolio_summary_tool, risk_score_tool, rebalancing_tool, market_context_tool,
              profit_booking_tool, sector_performance_tool, investment_guidance_tool,
              historical_performance_tool, stock_screener_tool, growth_illustrator_tool,
              goal_gap_analysis_tool, capital_gains_tax_tool, tax_saving_instruments_tool,
-             stress_test_tool]
+             stress_test_tool, swing_analysis_tool, swing_screener_by_sector_tool]
 
 TOOLS_BY_NAME = {t.name: t for t in ALL_TOOLS}
 
@@ -459,7 +495,16 @@ own age/amount/risk category instead.
 - For stress_test_tool results: always state this replays REAL past
   events against current holdings and is NOT a prediction that a
   similar crash will happen again — never imply the numbers shown
-  represent a forecast."""
+  represent a forecast.
+- For swing_analysis_tool and swing_screener_by_sector_tool results:
+  present the real technical/volume/
+  news data factually (e.g. "RSI is 68, ADX is 31 indicating a strong
+  trend"). NEVER convert this into a Buy/Sell recommendation, entry
+  price, stop-loss, price target, or confidence score — no one can
+  reliably predict short-term price direction, and doing so would
+  fabricate false precision. If asked directly for a trading signal,
+  explain that this tool shows real data for the user's own judgment,
+  not a signal."""
 
 
 # Approximate per-token pricing (USD), used only for a rough cost estimate
@@ -677,6 +722,66 @@ def generate_sector_wise_suggestions(sector_grouped_data: dict) -> str:
     )
     response = llm.invoke([HumanMessage(content=prompt)])
     return response.content
+
+
+EXECUTIVE_SUMMARY_PROMPT = """You are writing a one-client executive summary for
+a wealth management advisor, based ONLY on the real, current data provided below.
+
+STRICT RULES:
+- Every number and claim must come from the data given — never invent, estimate,
+  or round in a way that changes a figure. Quote figures exactly as given.
+- NEVER predict future prices or performance, and never give a confident buy/sell
+  recommendation — this data may include rebalancing/profit-booking suggestions,
+  which you should present as flagged considerations for the advisor to review,
+  not as decisions already made.
+- Structure the summary in four short sections with these exact headers:
+  **Overview** (total value, gain/loss, asset mix in one or two sentences),
+  **Risk** (risk score/level and the single biggest contributing factor),
+  **Flagged Considerations** (rebalancing and/or profit-booking items, if any —
+  say "None flagged" if both are empty), **Tax Notes** (if any tax figures were
+  provided, summarize briefly with the disclaimer that this is not final tax advice).
+- Keep the whole summary under 200 words. Be factual and neutral — no hype,
+  no urgency language, no "you should definitely."
+- If a data section is missing or contains an "error", say so plainly in that
+  section rather than skipping it silently.
+
+REAL CLIENT DATA:
+{data_json}
+
+Write the four-section executive summary now."""
+
+
+def generate_client_executive_summary(client_id: str) -> Dict[str, Any]:
+    """
+    Generate an AI-written executive summary for ONE client, synthesizing
+    real data from portfolio_summary, risk_score, rebalancing, and
+    profit_booking — all deterministic, already-computed data. GPT-4o's
+    ONLY job here is to turn that real data into readable prose; it does
+    not calculate anything itself.
+
+    Args:
+        client_id: e.g. "CLIENT_001"
+
+    Returns:
+        dict with client_id, summary_text (the AI-written brief), and
+        the raw underlying data used (for a "show your work" expander)
+    """
+    raw_data = {
+        "portfolio_summary": get_portfolio_summary(client_id),
+        "risk_score": calc_risk_score(client_id),
+        "rebalancing_suggestion": suggest_rebalancing(client_id),
+        "profit_booking": suggest_profit_booking(client_id),
+    }
+
+    llm = ChatOpenAI(model=OPENAI_MODEL, api_key=OPENAI_API_KEY, temperature=0.2)
+    prompt = EXECUTIVE_SUMMARY_PROMPT.format(data_json=json.dumps(raw_data, indent=2))
+    response = llm.invoke([HumanMessage(content=prompt)])
+
+    return {
+        "client_id": client_id,
+        "summary_text": response.content,
+        "raw_data": raw_data,
+    }
 
 
 if __name__ == "__main__":

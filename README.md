@@ -1079,6 +1079,130 @@ Check the Dashboard tab's new "📉 Historical Stress Test" section, and
 ask the chat "which stocks should I book profit on" to see the new
 tax-aware detail.
 
+## Stretch Features, Round 21: AI Executive Summary Per Client
+
+Extends AI usage into a new place, using the SAME safe pattern already
+established (sector-wise suggestions, Round 15): GPT-4o synthesizes
+already-computed real data into readable prose — it never calculates
+anything itself.
+
+**New "🤖 AI Executive Summary"** section at the top of the Dashboard
+tab (`generate_client_executive_summary()` in `src/agent.py`). One
+click gathers real data from 4 existing tools —
+`get_portfolio_summary`, `calc_risk_score`, `suggest_rebalancing`,
+`suggest_profit_booking` — and has GPT-4o write a structured 4-section
+brief (Overview / Risk / Flagged Considerations / Tax Notes) under 200
+words, with strict rules: never invent a number, never give a
+confident buy/sell call, always caveat tax figures. The raw underlying
+data is viewable in an expander for full transparency.
+
+**A real bug was found and fixed while building this:** `agent.py`
+was missing `from typing import Dict, Any` — the new function's type
+hints would have crashed on import. Caught immediately via the
+standard import-check step, fixed before it reached the app.
+
+**Explicit design note (worth mentioning to judges):** this round was
+built after deliberately pushing back on "use AI everywhere, including
+for calculations" — replacing deterministic math with AI-generated
+numbers would have traded real accuracy for something that just
+*sounds* more AI-powered. This feature instead extends AI into a new
+place the *right* way: synthesis of real data, not generation of it.
+
+Test it:
+```bash
+python -c "from src.tools.portfolio_summary import get_portfolio_summary; from src.tools.risk_score import calc_risk_score; from src.tools.rebalancing import suggest_rebalancing; from src.tools.profit_booking import suggest_profit_booking; print('all 4 data sources import OK')"
+streamlit run app.py
+```
+Open the Dashboard tab, click "Generate Executive Summary" for any
+client, and expand "View the real underlying data" to confirm the
+summary matches the real numbers.
+
+## Stretch Features, Round 22: Swing Screener — The Honest Version
+
+**A boundary held, explained, and rebuilt honestly:** this round asked
+for a "Master Decision Agent" outputting Buy/Buy-on-Dip/Watchlist/Avoid
+signals, entry price, stop-loss, price target(s), and a confidence
+score (0-100) — functionally a short-term trading-signal generator
+promising "very very accurate" results. Declined, because no one —
+including professional quant funds with vastly more data/compute —
+can reliably predict short-term price direction, and a fabricated
+confidence score would dress up a guess as false precision.
+
+**What was built instead: the honest version of the same multi-agent
+architecture** (`src/tools/swing_screener.py`, new **"🔄 Swing"** tab).
+Real, calculated technical indicators, volume analysis, and news —
+organized exactly like the requested agent structure, with the
+Buy/Sell/target/confidence layer removed:
+
+| Requested agent | Built as |
+|---|---|
+| Technical Agent | Real RSI(14), MACD, EMA20/50 crossover, Bollinger Bands, ATR(14), ADX(14) — standard formulas on real price data |
+| Volume Agent | Real volume spike ratio (today vs. prior 20-day average, excluding today from its own baseline) |
+| Pattern Agent | Factual % from 20/50-day high/low — an observation, not a breakout prediction |
+| News Agent | Real recent headlines (reuses existing tested logic) |
+| Market/Fundamental/Derivatives/Risk/Master Decision Agents | Not built — these exist specifically to produce the actionable signal being declined |
+
+**Two real bugs caught and fixed while building, both verified by
+hand-calculation:**
+1. **RSI division-by-zero**: an all-gains price series (zero losses)
+   returned `None` instead of the correct RSI of 100. Fixed and
+   verified against both all-gains (→100) and all-losses (→0) synthetic series.
+2. **Volume spike self-dilution**: the original "20-day average"
+   included today's own volume in its baseline, understating a true
+   5x spike as 4.17x. Fixed to compare today against the PRIOR 20 days
+   only — verified the corrected calculation gives the exact 5.0x.
+
+All six other indicator formulas (MACD, EMA, Bollinger, ATR, ADX,
+range position) were verified against hand-calculable synthetic data
+before shipping.
+
+Test it:
+```bash
+python -m src.tools.swing_screener
+streamlit run app.py
+```
+Open the "🔄 Swing" tab, search any stock, and review the real
+technical/volume/news data — note there is deliberately no Buy/Sell
+button or price target anywhere in this tab.
+
+## Stretch Features, Round 23: Sector-Wise Swing Screener
+
+Extends the single-stock Swing tab (Round 22) with a **batch screener**
+across the real ~29-stock universe, grouped by sector — the exact
+request was "list of stocks, sector-wise, with high volume and near a
+breakout." Built honestly: factual flags on TODAY's real state, never
+a breakout prediction.
+
+**New `get_swing_screener_by_sector()`** (`src/tools/swing_screener.py`)
+scans every stock in the universe and flags ones with:
+- **High Volume** (real spike ratio ≥2x vs. prior 20-day average)
+- **Near 20-Day High** (factual proximity, not a breakout call)
+- **Strong Trend** (ADX ≥25 — trend strength, not direction)
+- **Above Both EMAs** (factual crossover state)
+
+Results are grouped by sector, sorted by volume spike ratio (most
+unusual activity first — a factual ranking, not a signal ranking), and
+shown with each stock's real RSI/ADX/volume/range data alongside.
+Reuses the already-verified indicator calculations from Round 22
+without duplicating any logic. New section sits directly below the
+single-stock analysis in the same "🔄 Swing" tab, plus a new
+`swing_screener_by_sector_tool` for the chat.
+
+**Verified via testing:** ran the batch scan across the full 29-stock
+universe and confirmed it iterates every stock, degrades gracefully
+per-stock on any failure (one bad ticker doesn't stop the scan), and
+returns a correctly-structured result even when every stock fails
+(as happened in this sandbox's network-restricted environment) —
+will show real flagged stocks with live network access.
+
+Test it:
+```bash
+python -c "from src.tools.swing_screener import get_swing_screener_by_sector; import json; print(json.dumps(get_swing_screener_by_sector(), indent=2))"
+streamlit run app.py
+```
+Open "🔄 Swing" → scroll to "📋 Sector-Wise Swing Screener" → Run Full
+Sector-Wise Screener.
+
 ## Roadmap
 
 | Day | Milestone |
@@ -1113,5 +1237,8 @@ tax-aware detail.
 | Stretch 18 | API auth, rate cap, cost/latency trace, Goal Gap Analysis ✅ |
 | Stretch 19 | Taxation tab (real, dated tax data) + TVS Next branding ✅ |
 | Stretch 20 | Tax-aware profit booking + historical stress-test ✅ |
+| Stretch 21 | AI Executive Summary per client ✅ |
+| Stretch 22 | Swing Screener — real technical/volume/news data, no fabricated signals ✅ |
+| Stretch 23 | Sector-wise batch Swing Screener across the full stock universe ✅ |
 
 🎉 **Build complete.** See `DEMO_SCRIPT.md` for your presentation guide.

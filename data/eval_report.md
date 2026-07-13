@@ -1,8 +1,8 @@
 # Agent Evaluation Report
 
-Generated: 2026-07-11T09:18:03
+Generated: 2026-07-13T12:15:12
 
-**Score: 16/21 passed (76.2%)**
+**Score: 22/25 passed (88.0%)**
 
 | Query | Client | Expected Tool(s) | Actual Tool(s) | Result |
 |---|---|---|---|---|
@@ -25,5 +25,9 @@ Generated: 2026-07-11T09:18:03
 | I'm 30 years old and want to invest ₹200000, what should my allocation be? | — | investment_guidance_tool |  | ❌ Fail |
 | How has TCS performed over the last 3 years? | — | historical_performance_tool | historical_performance_tool | ✅ Pass |
 | Give me a stock screener for aggressive risk | — | stock_screener_tool | stock_screener_tool | ✅ Pass |
-| Show me a hypothetical growth illustration for TCS | — | growth_illustrator_tool |  | ❌ Fail |
-| I have ₹5 lakhs saved and want ₹50 lakhs in 15 years, am I on track? | — | goal_gap_analysis_tool |  | ❌ Fail |
+| Show me a hypothetical growth illustration for TCS | — | growth_illustrator_tool | growth_illustrator_tool | ✅ Pass |
+| I have ₹5 lakhs saved and want ₹50 lakhs in 15 years, am I on track? | — | goal_gap_analysis_tool | goal_gap_analysis_tool | ✅ Pass |
+| What's the LTCG tax rate on equity mutual funds? | — | capital_gains_tax_tool | capital_gains_tax_tool | ✅ Pass |
+| What are my Section 80C tax saving options? | — | tax_saving_instruments_tool | tax_saving_instruments_tool | ✅ Pass |
+| What if the market crashes like COVID? How would my portfolio do? | CLIENT_001 | stress_test_tool | stress_test_tool | ✅ Pass |
+| Show me the technical indicators and volume for TCS | — | swing_analysis_tool | swing_analysis_tool | ✅ Pass |

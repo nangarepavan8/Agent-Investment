@@ -12,7 +12,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 
-from src.agent import run_agent, generate_sector_wise_suggestions
+from src.agent import run_agent, generate_sector_wise_suggestions, generate_client_executive_summary
 from src.tools.data_loader import load_clients
 from src.tools.portfolio_summary import get_portfolio_summary
 from src.tools.risk_score import calc_risk_score
@@ -26,6 +26,7 @@ from src.tools.growth_illustrator import get_hypothetical_growth
 from src.tools.asset_education import get_asset_education
 from src.tools.goal_gap_analysis import calc_goal_gap
 from src.tools.tax_guidance import get_capital_gains_rules, get_tax_saving_instruments, CAPITAL_GAINS_RULES
+from src.tools.swing_screener import get_swing_analysis, get_swing_screener_by_sector
 
 st.set_page_config(
     page_title="Agentic Investment Research Assistant",
@@ -252,8 +253,9 @@ with st.expander("ℹ️ How this works (architecture)"):
     Fabric, and Azure hosting for production, multi-user deployment.
     """)
 
-tab_chat, tab_dashboard, tab_alerts, tab_audit, tab_investor, tab_screener, tab_tax = st.tabs(
-    ["💬 Chat", "📊 Dashboard", "🔔 Portfolio Alerts", "📋 Audit Log", "🧑‍💼 For Investors", "🔎 Stock Screener", "💰 Taxation"]
+tab_chat, tab_dashboard, tab_alerts, tab_audit, tab_investor, tab_screener, tab_tax, tab_swing = st.tabs(
+    ["💬 Chat", "📊 Dashboard", "🔔 Portfolio Alerts", "📋 Audit Log", "🧑‍💼 For Investors",
+     "🔎 Stock Screener", "💰 Taxation", "🔄 Swing"]
 )
 
 # ---------------------------------------------------------------------------
@@ -263,6 +265,29 @@ with tab_dashboard:
     try:
         summary = get_portfolio_summary(selected_client_id)
         risk = calc_risk_score(selected_client_id)
+
+        # --- AI Executive Summary: synthesis of real data, not new calculations ---
+        st.markdown("### 🤖 AI Executive Summary")
+        st.caption(
+            "GPT-4o synthesizes real portfolio, risk, rebalancing, and profit-booking data "
+            "into a readable brief — it does NOT calculate any of the underlying numbers itself."
+        )
+
+        if st.button("Generate Executive Summary", use_container_width=True):
+            if check_query_budget():
+                with st.spinner("Gathering real client data and generating summary..."):
+                    exec_summary = generate_client_executive_summary(selected_client_id)
+                st.session_state[f"exec_summary_{selected_client_id}"] = exec_summary
+                log_event("executive_summary_generated", selected_client_id, {})
+
+        exec_summary_key = f"exec_summary_{selected_client_id}"
+        if exec_summary_key in st.session_state:
+            exec_summary = st.session_state[exec_summary_key]
+            st.info(exec_summary["summary_text"])
+            with st.expander("📊 View the real underlying data used above"):
+                st.json(exec_summary["raw_data"])
+
+        st.markdown("---")
 
         st.caption(
             f"👤 Age {summary.get('age', '—')} · Goal: {summary.get('investment_goal', '—')} · "
@@ -1282,6 +1307,202 @@ with tab_tax:
             st.markdown(answer)
 
         st.session_state.tax_chat_messages.append({
+            "role": "assistant", "content": answer, "tool_calls": tool_calls,
+            "latency_seconds": latency_seconds, "input_tokens": input_tokens,
+            "output_tokens": output_tokens, "approx_cost_usd": approx_cost_usd,
+        })
+        st.rerun()
+
+# ---------------------------------------------------------------------------
+# SWING TAB - real technical indicators, volume analysis, range position,
+# and news for swing/short-term data screening. DELIBERATELY NO Buy/Sell
+# signal, entry price, stop-loss, price target, or confidence score - no
+# one can reliably predict short-term price direction, and fabricating
+# that would be actively misleading. This is a data screener, not a
+# trading-signal generator.
+# ---------------------------------------------------------------------------
+with tab_swing:
+    st.subheader("🔄 Swing Screener — Real Technical & Volume Data")
+    st.error(
+        "⚠️ **This is NOT a Buy/Sell signal, price target, or trading recommendation.** "
+        "No one — including professional quant funds — can reliably predict short-term "
+        "price direction. This shows REAL, calculated technical indicators, volume "
+        "activity, and news so you can apply your own judgment."
+    )
+
+    swing_symbol = st.text_input(
+        "Search any stock (e.g. TCS, INFY, RELIANCE — Indian exchange suffix auto-detected)",
+        value="TCS.NS", key="swing_search_input",
+    ).strip()
+
+    if st.button("Run Swing Analysis", use_container_width=True):
+        with st.spinner("Calculating real technical indicators and volume data..."):
+            swing_result = get_swing_analysis(swing_symbol)
+        st.session_state.swing_result = swing_result
+        log_event("swing_analysis_run", None, {"symbol": swing_symbol})
+
+    if "swing_result" in st.session_state:
+        sw = st.session_state.swing_result
+
+        if "error" in sw:
+            st.warning(f"⚠️ {sw['error']}")
+        else:
+            resolved_note = f" (resolved to {sw['resolved_symbol']})" if sw.get("resolved_symbol") != sw.get("symbol") else ""
+            st.success(f"Current price: ₹{sw['current_price']:,.2f}{resolved_note}")
+
+            # --- Technical Agent ---
+            st.markdown("### 📈 Technical Indicators (Real, Calculated)")
+            t = sw["technical"]
+            tcol1, tcol2, tcol3, tcol4 = st.columns(4)
+            tcol1.metric("RSI (14)", t["rsi_14"])
+            tcol1.caption("Conventionally: >70 'overbought', <30 'oversold' — textbook definition, not a signal for THIS stock")
+            tcol2.metric("ADX (14)", t["adx_14"])
+            tcol2.caption("Trend STRENGTH (not direction). >25 conventionally = trending market")
+            tcol3.metric("ATR (14)", t["atr_14"])
+            tcol3.caption("Average daily price range — a volatility measure")
+            tcol4.metric("MACD Histogram", t["macd"]["histogram"])
+            tcol4.caption(f"MACD {'above' if t['macd']['macd_above_signal'] else 'below'} signal line (factual state)")
+
+            ecol1, ecol2, ecol3 = st.columns(3)
+            ecol1.metric("EMA 20", t["ema_status"]["ema20"])
+            ecol2.metric("EMA 50", t["ema_status"]["ema50"])
+            ecol3.metric(
+                "EMA20 vs EMA50",
+                "20 above 50" if t["ema_status"]["ema20_above_ema50"] else "20 below 50",
+            )
+
+            st.markdown("**Bollinger Bands (20, 2σ)**")
+            bb = t["bollinger_bands"]
+            bcol1, bcol2, bcol3, bcol4 = st.columns(4)
+            bcol1.metric("Lower Band", bb["lower_band"])
+            bcol2.metric("Middle (SMA20)", bb["middle_band"])
+            bcol3.metric("Upper Band", bb["upper_band"])
+            bcol4.metric("Position in Bands", f"{bb['pct_position_in_bands']}%")
+
+            # --- Volume Agent ---
+            st.markdown("---")
+            st.markdown("### 📊 Volume Analysis (Real)")
+            v = sw["volume"]
+            vcol1, vcol2, vcol3 = st.columns(3)
+            vcol1.metric("Today's Volume", f"{v['current_volume']:,}")
+            vcol2.metric("Prior 20-Day Avg", f"{v['avg_volume_20d_prior']:,}" if v['avg_volume_20d_prior'] else "—")
+            vcol3.metric(
+                "Volume Spike Ratio", f"{v['volume_spike_ratio']}x" if v['volume_spike_ratio'] else "—",
+                "🔥 High Volume" if v["is_high_volume"] else "Normal",
+            )
+
+            # --- Pattern/Range Agent ---
+            st.markdown("---")
+            st.markdown("### 📐 Price Range Position (Real, Factual)")
+            rp = sw["range_position"]
+            rcol1, rcol2, rcol3 = st.columns(3)
+            rcol1.metric("% From 20-Day High", f"{rp['pct_from_20d_high']:+.2f}%")
+            rcol2.metric("% From 20-Day Low", f"{rp['pct_from_20d_low']:+.2f}%")
+            rcol3.metric("% From 50-Day High", f"{rp['pct_from_50d_high']:+.2f}%")
+            if rp["at_20d_high"]:
+                st.caption("📍 Currently at or near its 20-day high (factual observation, not a breakout prediction)")
+
+            # --- News Agent ---
+            if sw.get("recent_headlines"):
+                st.markdown("---")
+                st.markdown("### 📰 Recent News (Real)")
+                for headline in sw["recent_headlines"]:
+                    st.markdown(f"- {headline}")
+
+            st.markdown("---")
+            st.error(f"⚠️ {sw['disclaimer']}")
+
+    # --- Sector-Wise Swing Screener (batch, real data across the universe) ---
+    st.markdown("---")
+    st.markdown("### 📋 Sector-Wise Swing Screener — High Volume & Near-High Stocks")
+    st.error(
+        "⚠️ **Still NOT a breakout prediction or Buy/Sell signal.** These stocks show "
+        "REAL, CURRENT high volume and/or proximity to their 20-day high — a factual "
+        "snapshot of today only. Whether a real breakout follows cannot be predicted."
+    )
+
+    if st.button("Run Full Sector-Wise Screener", use_container_width=True):
+        with st.spinner("Scanning the real stock universe (this takes a moment)..."):
+            batch_result = get_swing_screener_by_sector()
+        st.session_state.swing_batch_result = batch_result
+        log_event("swing_sector_screener_run", None, {"total_flagged": batch_result.get("total_flagged")})
+
+    if "swing_batch_result" in st.session_state:
+        br = st.session_state.swing_batch_result
+
+        if "error" in br:
+            st.warning(f"⚠️ {br['error']}")
+        else:
+            st.success(
+                f"{br['total_flagged']} of {br['universe_size']} stocks currently flagged "
+                f"(high volume, near 20-day high, strong trend, or above both EMAs)."
+            )
+
+            if not br["sectors"]:
+                st.info("No stocks currently match — this reflects real current market conditions, try again shortly.")
+            else:
+                for sector, stocks in br["sectors"].items():
+                    st.markdown(f"**{sector}**")
+                    sector_df = pd.DataFrame(stocks)
+                    sector_df["flags"] = sector_df["flags"].apply(lambda f: ", ".join(f) if f else "—")
+                    display_cols = ["symbol", "current_price", "rsi_14", "adx_14",
+                                     "volume_spike_ratio", "pct_from_20d_high", "flags"]
+                    display_cols = [c for c in display_cols if c in sector_df.columns]
+                    st.dataframe(sector_df[display_cols], use_container_width=True, hide_index=True)
+
+            st.caption(f"ℹ️ {br['disclaimer']}")
+
+    # --- Swing chat section ---
+    st.markdown("---")
+    st.markdown("### Ask About This Stock's Data")
+    st.caption("e.g. \"Is this stock overbought?\", \"What does the volume spike mean?\" — answered from real data, never a signal.")
+
+    if "swing_chat_messages" not in st.session_state:
+        st.session_state.swing_chat_messages = []
+
+    for msg in st.session_state.swing_chat_messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+            if msg["role"] == "assistant" and (msg.get("tool_calls") or msg.get("latency_seconds") is not None):
+                with st.expander("🧠 Reasoning"):
+                    for tc in msg.get("tool_calls", []):
+                        st.markdown(f"- Called `{tc['name']}` with `{tc['args']}`")
+                    if msg.get("latency_seconds") is not None:
+                        st.caption(
+                            f"⏱️ {msg['latency_seconds']}s · 🔢 {msg.get('input_tokens', 0)}+{msg.get('output_tokens', 0)} tokens "
+                            f"· 💵 ~${msg.get('approx_cost_usd', 0):.5f}"
+                        )
+
+    swing_question = st.chat_input("Ask about technical indicators, volume, or news for this stock...", key="swing_chat_input")
+
+    if swing_question:
+        st.session_state.swing_chat_messages.append({"role": "user", "content": swing_question})
+        with st.chat_message("user"):
+            st.markdown(swing_question)
+
+        if not check_query_budget():
+            st.stop()
+
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
+                try:
+                    result = run_agent(swing_question, client_id=None, verbose=False)
+                    answer = result["answer"]
+                    tool_calls = result["tool_calls"]
+                    latency_seconds = result.get("latency_seconds")
+                    input_tokens = result.get("input_tokens", 0)
+                    output_tokens = result.get("output_tokens", 0)
+                    approx_cost_usd = result.get("approx_cost_usd", 0)
+                except Exception as e:
+                    answer = f"⚠️ Something went wrong: {e}"
+                    tool_calls = []
+                    latency_seconds = None
+                    input_tokens = 0
+                    output_tokens = 0
+                    approx_cost_usd = 0
+            st.markdown(answer)
+
+        st.session_state.swing_chat_messages.append({
             "role": "assistant", "content": answer, "tool_calls": tool_calls,
             "latency_seconds": latency_seconds, "input_tokens": input_tokens,
             "output_tokens": output_tokens, "approx_cost_usd": approx_cost_usd,
