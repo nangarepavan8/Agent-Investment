@@ -159,6 +159,50 @@ def _calc_range_position(close: pd.Series, high: pd.Series, low: pd.Series) -> D
     }
 
 
+def _calc_indicator_tally(technical: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Count how many of 5 ALREADY-CALCULATED indicators currently sit on
+    the "bullish-leaning" side of their own neutral midpoint today —
+    a factual tally of today's real readings, explicitly NOT a
+    prediction, confidence score, or Buy/Sell signal. Each component
+    is a simple factual observation (e.g. "is RSI above its own
+    midpoint of 50 right now") — nothing here is synthesized,
+    weighted, or invented; it's literally just counting real states
+    that were already computed elsewhere in this file.
+    """
+    checks = []
+
+    if technical["rsi_14"] is not None:
+        checks.append(technical["rsi_14"] > 50)
+    if technical["macd"]["macd_above_signal"] is not None:
+        checks.append(technical["macd"]["macd_above_signal"])
+    if technical["ema_status"]["ema20_above_ema50"] is not None:
+        checks.append(technical["ema_status"]["ema20_above_ema50"])
+    if technical["ema_status"]["price_above_ema20"] is not None:
+        checks.append(technical["ema_status"]["price_above_ema20"])
+    if technical["bollinger_bands"]["pct_position_in_bands"] is not None:
+        checks.append(technical["bollinger_bands"]["pct_position_in_bands"] > 50)
+
+    total = len(checks)
+    bullish_count = sum(checks)
+    bearish_count = total - bullish_count
+    bullish_pct = round((bullish_count / total) * 100, 1) if total else 0.0
+
+    return {
+        "bullish_count": bullish_count,
+        "bearish_count": bearish_count,
+        "total_indicators": total,
+        "bullish_pct": bullish_pct,
+        "bearish_pct": round(100 - bullish_pct, 1),
+        "note": (
+            f"{bullish_count} of {total} real indicators are currently on the bullish-leaning "
+            f"side of their own neutral midpoint today. This is a factual TALLY of today's "
+            f"readings — NOT a prediction, confidence score, or Buy/Sell recommendation. "
+            f"Indicators can and do flip; this describes right now, not what happens next."
+        ),
+    }
+
+
 def get_swing_analysis(symbol: str) -> Dict[str, Any]:
     """
     Full real-data swing screening analysis for one stock: technical
@@ -193,6 +237,7 @@ def get_swing_analysis(symbol: str) -> Dict[str, Any]:
         }
         volume_analysis = _calc_volume_analysis(volume)
         range_position = _calc_range_position(close, high, low)
+        indicator_tally = _calc_indicator_tally(technical)
 
         # Real recent news (reuse existing, already-tested logic)
         recent_headlines = []
@@ -211,6 +256,7 @@ def get_swing_analysis(symbol: str) -> Dict[str, Any]:
             "resolved_symbol": resolved_symbol,
             "current_price": round(float(close.iloc[-1]), 2),
             "technical": technical,
+            "indicator_tally": indicator_tally,
             "volume": volume_analysis,
             "range_position": range_position,
             "recent_headlines": recent_headlines,

@@ -519,12 +519,15 @@ own age/amount/risk category instead.
 - For swing_analysis_tool and swing_screener_by_sector_tool results:
   present the real technical/volume/
   news data factually (e.g. "RSI is 68, ADX is 31 indicating a strong
-  trend"). NEVER convert this into a Buy/Sell recommendation, entry
-  price, stop-loss, price target, or confidence score — no one can
-  reliably predict short-term price direction, and doing so would
-  fabricate false precision. If asked directly for a trading signal,
-  explain that this tool shows real data for the user's own judgment,
-  not a signal."""
+  trend"). If the result includes "indicator_tally" (e.g. "3 of 5
+  indicators bullish-leaning"), present it exactly as that — a factual
+  COUNT of today's real indicator readings — NEVER as a confidence
+  score, win probability, or "X% chance this goes up." NEVER convert
+  any of this into a Buy/Sell recommendation, entry price, stop-loss,
+  price target, or confidence score — no one can reliably predict
+  short-term price direction, and doing so would fabricate false
+  precision. If asked directly for a trading signal, explain that this
+  tool shows real data for the user's own judgment, not a signal."""
 
 
 # Approximate per-token pricing (USD), used only for a rough cost estimate

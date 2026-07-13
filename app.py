@@ -1356,6 +1356,30 @@ with tab_swing:
             resolved_note = f" (resolved to {sw['resolved_symbol']})" if sw.get("resolved_symbol") != sw.get("symbol") else ""
             st.success(f"Current price: ₹{sw['current_price']:,.2f}{resolved_note}")
 
+            # --- Today's Indicator Scoreboard (a FACTUAL TALLY, not a signal) ---
+            tally = sw["indicator_tally"]
+            st.markdown("### Today's Indicator Scoreboard")
+            st.markdown(f"""
+            <div style="display:flex; width:100%; height:34px; border-radius:8px; overflow:hidden; margin-bottom:6px;">
+                <div style="width:{tally['bullish_pct']}%; background:#2ECC71; display:flex; align-items:center;
+                            justify-content:center; color:white; font-size:0.9rem; font-weight:700;">
+                    {tally['bullish_pct']}%
+                </div>
+                <div style="width:{tally['bearish_pct']}%; background:#E74C3C; display:flex; align-items:center;
+                            justify-content:center; color:white; font-size:0.9rem; font-weight:700;">
+                    {tally['bearish_pct']}%
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            st.error(
+                f"⚠️ **This is a factual TALLY, NOT a Buy/Sell signal or confidence score.** "
+                f"{tally['bullish_count']} of {tally['total_indicators']} real indicators "
+                f"(RSI, MACD, EMA crossover, price vs. EMA20, Bollinger position) are currently "
+                f"on the bullish-leaning side of their own neutral midpoint TODAY — this "
+                f"describes right now, not what happens next. No one can reliably predict "
+                f"short-term price direction."
+            )
+
             # --- Technical Agent ---
             st.markdown("### 📈 Technical Indicators (Real, Calculated)")
             t = sw["technical"]
