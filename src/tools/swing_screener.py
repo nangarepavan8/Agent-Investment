@@ -309,10 +309,14 @@ def get_swing_screener_by_sector(min_flags: int = 1) -> Dict[str, Any]:
         "total_flagged": len(results),
         "universe_size": len(SCREENER_UNIVERSE),
         "disclaimer": (
-            "These stocks show REAL, CURRENT high volume and/or proximity to their "
-            "20-day high — factual observations about TODAY only. This is NOT a list "
-            "of stocks that will break out, and NOT a Buy/Sell signal. No one can "
-            "reliably predict whether a real breakout will follow."
+            f"These stocks show REAL, CURRENT high volume and/or proximity to their "
+            f"20-day high — factual observations about TODAY only. This is NOT a list "
+            f"of stocks that will break out, and NOT a Buy/Sell signal. Scanned across "
+            f"{len(SCREENER_UNIVERSE)} real NSE stocks (a broad basket across many "
+            f"sectors) — NOT literally all ~2,000 NSE-listed companies, which isn't "
+            f"practically scannable in one pass. Any other real stock (e.g. a smaller "
+            f"or less well-known one) can still be checked individually via the "
+            f"single-stock search above."
         ),
     }
 

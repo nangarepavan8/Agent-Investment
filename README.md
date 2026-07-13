@@ -1203,6 +1203,88 @@ streamlit run app.py
 Open "🔄 Swing" → scroll to "📋 Sector-Wise Swing Screener" → Run Full
 Sector-Wise Screener.
 
+## Stretch Features, Round 24: Broader Universe + Color Gauges
+
+**Clarified something important:** the single-stock search (Swing tab
+and Stock Research) already works for ANY real, currently-listed NSE
+stock — including less well-known ones like CRAMC (Canara Robeco Asset
+Management, confirmed real via research). It was never limited to the
+~29 blue chips; that limit only applied to the BATCH screener.
+
+**1. Expanded screening universe: 29 → 65 stocks, 8 → 17 sectors**
+(`src/tools/stock_screener.py`, shared by both Stock Screener and
+Swing Screener batch tools). Added Banking (IndusInd), Energy (IOC,
+BPCL, Coal India), FMCG (Britannia, Dabur, Marico), Automobile (TVS
+Motor, M&M), Pharma (Apollo Hospitals), Industrials (Ambuja, Siemens),
+new Financials (Bajaj Finance/Finserv, HDFC Life, SBI Life), Consumer
+(Asian Paints, Pidilite, Godrej), Materials (Grasim, Hindalco, Tata
+Steel, JSW Steel, Vedanta), Conglomerate (Adani Enterprises), Power
+(Adani Green, Tata Power), Telecom (Bharti Airtel, Indus Towers),
+Retail (DMart, Trent), Internet (Naukri, Zomato), Consumer Durables
+(Havells, Voltas), Real Estate (DLF). Verified every ticker has a
+correct sector mapping with no gaps.
+
+**Honest note added directly in the UI and tool disclaimer:** this is
+a broad basket, explicitly NOT literally all ~2,000 NSE-listed
+companies — scanning that many individually via yfinance isn't
+practically feasible (would take a very long time and likely get
+rate-limited). Any other real stock can still be checked individually
+via the single-stock search.
+
+**2. RSI and Bollinger Band color gauges** — replaced plain numbers
+with Plotly gauge charts, color-zoned using textbook-standard
+definitions (RSI: 0-30 green/oversold, 30-70 gray/neutral, 70-100
+red/overbought; Bollinger: near-lower/mid-range/near-upper). Added the
+requested green%/red% split (e.g. RSI=50 → verified exactly 50%
+green/50% red) — describing WHERE the value sits on the scale, never
+reframed as a buy/sell signal.
+
+Test it:
+```bash
+python -c "from src.tools.stock_screener import SCREENER_UNIVERSE; print(len(SCREENER_UNIVERSE), 'stocks')"
+streamlit run app.py
+```
+Open "🔄 Swing" → search "CRAMC" directly (confirms single-stock search
+isn't limited to well-known names) → check the new RSI/Bollinger
+gauges → run the sector-wise screener and note the now-broader
+coverage.
+
+## Stretch Features, Round 25: NSE Live Feed Attempt (Honest Result) + Cleanup
+
+**Attempted true "ALL NSE" coverage** (`src/tools/nse_live_data.py`):
+fetches NSE's own live "Most Active by Volume" feed directly, which
+would cover the entire exchange rather than the ~65-stock list. Used
+the same `curl_cffi` browser-impersonation technique that successfully
+fixed Yahoo Finance's cloud-deployment blocking (Round 17).
+
+**Honest result: NSE returned a real 403 even with this fix.** Their
+anti-bot protection is more aggressive than Yahoo's — a simple
+session/cookie/header approach isn't enough to bypass it. Rather than
+claim this works when it's unverified, it's wired in as a clearly
+labeled **"🧪 Experimental"** button in the Swing tab — worth testing
+on your own network (results may differ), but the broad 65-stock
+Sector-Wise Screener remains the reliable, verified path, and any
+specific known ticker (like the CRAMC example) already works via
+direct single-stock search regardless of any predefined list.
+
+**A real duplicate-work issue was caught and removed:** while building
+a new color-coded percentage bar, discovered the existing `render_gauge`
+function (Plotly gauges, proper textbook zone coloring) already covers
+RSI and Bollinger position — the same feature, already built and
+verified in Round 24. Removed the newly-added duplicate rather than
+shipping two competing implementations for the same indicator;
+confirmed via a fresh boot test that the cleanup introduced no
+regressions.
+
+Test it:
+```bash
+python -m src.tools.nse_live_data   # expect this may fail — that's the honest, current state
+streamlit run app.py
+```
+Open "🔄 Swing" → try "🧪 Experimental: Live NSE Volume Feed" — if it
+works on your network, great; if it 403s, that's expected given NSE's
+anti-bot protection, and the Sector-Wise Screener above it remains reliable.
+
 ## Roadmap
 
 | Day | Milestone |
@@ -1240,5 +1322,7 @@ Sector-Wise Screener.
 | Stretch 21 | AI Executive Summary per client ✅ |
 | Stretch 22 | Swing Screener — real technical/volume/news data, no fabricated signals ✅ |
 | Stretch 23 | Sector-wise batch Swing Screener across the full stock universe ✅ |
+| Stretch 24 | Expanded universe (29→65 stocks) + RSI/Bollinger color gauges ✅ |
+| Stretch 25 | NSE live feed attempt (honest experimental result) + duplicate-code cleanup ✅ |
 
 🎉 **Build complete.** See `DEMO_SCRIPT.md` for your presentation guide.

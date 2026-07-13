@@ -27,6 +27,7 @@ from src.tools.asset_education import get_asset_education
 from src.tools.goal_gap_analysis import calc_goal_gap
 from src.tools.tax_guidance import get_capital_gains_rules, get_tax_saving_instruments, CAPITAL_GAINS_RULES
 from src.tools.swing_screener import get_swing_analysis, get_swing_screener_by_sector
+from src.tools.nse_live_data import get_nse_most_active_by_volume
 
 st.set_page_config(
     page_title="Agentic Investment Research Assistant",
@@ -1331,9 +1332,14 @@ with tab_swing:
     )
 
     swing_symbol = st.text_input(
-        "Search any stock (e.g. TCS, INFY, RELIANCE — Indian exchange suffix auto-detected)",
+        "Search any stock (e.g. TCS, INFY, RELIANCE, or any real NSE ticker like CRAMC — auto-detects .NS/.BO)",
         value="TCS.NS", key="swing_search_input",
     ).strip()
+    st.caption(
+        "ℹ️ This search works for ANY real, currently-listed NSE/BSE stock — not limited to "
+        "well-known names. The sector-wise screener further below, however, scans a fixed "
+        "broad basket (~65 stocks), not literally every NSE-listed company (see note there)."
+    )
 
     if st.button("Run Swing Analysis", use_container_width=True):
         with st.spinner("Calculating real technical indicators and volume data..."):
@@ -1353,9 +1359,75 @@ with tab_swing:
             # --- Technical Agent ---
             st.markdown("### 📈 Technical Indicators (Real, Calculated)")
             t = sw["technical"]
-            tcol1, tcol2, tcol3, tcol4 = st.columns(4)
-            tcol1.metric("RSI (14)", t["rsi_14"])
-            tcol1.caption("Conventionally: >70 'overbought', <30 'oversold' — textbook definition, not a signal for THIS stock")
+
+            def render_gauge(value, title, zones, key):
+                """
+                Color-zoned gauge for a 0-100 scaled indicator. Zones are
+                textbook-standard definitions (e.g. RSI overbought/oversold),
+                NOT a personalized signal for this specific stock — same
+                factual framing as the rest of this tool.
+                """
+                if value is None:
+                    st.caption(f"{title}: not available")
+                    return
+                fig = go.Figure(go.Indicator(
+                    mode="gauge+number",
+                    value=value,
+                    title={"text": title},
+                    gauge={
+                        "axis": {"range": [0, 100]},
+                        "bar": {"color": "#0B1F4D"},
+                        "steps": zones,
+                        "threshold": {
+                            "line": {"color": "black", "width": 3},
+                            "thickness": 0.8,
+                            "value": value,
+                        },
+                    },
+                ))
+                fig.update_layout(height=220, margin=dict(t=40, b=10, l=20, r=20))
+                st.plotly_chart(fig, use_container_width=True, key=key)
+
+            gcol1, gcol2 = st.columns(2)
+            with gcol1:
+                rsi_val = t["rsi_14"]
+                render_gauge(
+                    rsi_val, f"RSI (14) — {rsi_val}",
+                    zones=[
+                        {"range": [0, 30], "color": "#B7E4C7"},   # oversold zone (textbook "green")
+                        {"range": [30, 70], "color": "#E0E0E0"},  # neutral zone
+                        {"range": [70, 100], "color": "#F5B7B1"}, # overbought zone (textbook "red")
+                    ],
+                    key="rsi_gauge",
+                )
+                if rsi_val is not None:
+                    green_pct = round(100 - rsi_val, 1)  # % of the scale BELOW current reading
+                    red_pct = round(rsi_val, 1)           # % of the scale AT/ABOVE current reading
+                    st.caption(
+                        f"🟢 {green_pct}% of the 0-100 scale lies below this reading · "
+                        f"🔴 {red_pct}% lies at/above it. Zones: 0-30 oversold (textbook), "
+                        f"30-70 neutral, 70-100 overbought (textbook). This describes WHERE "
+                        f"on the scale the value sits — NOT a signal for this specific stock."
+                    )
+            with gcol2:
+                bb_pos = t["bollinger_bands"]["pct_position_in_bands"]
+                render_gauge(
+                    bb_pos, f"Bollinger Band Position — {bb_pos}%",
+                    zones=[
+                        {"range": [0, 20], "color": "#B7E4C7"},   # near lower band
+                        {"range": [20, 80], "color": "#E0E0E0"},  # middle of the bands
+                        {"range": [80, 100], "color": "#F5B7B1"}, # near upper band
+                    ],
+                    key="bollinger_gauge",
+                )
+                st.caption(
+                    f"🟢 {round(bb_pos, 1)}% of the way from the lower band toward the upper "
+                    f"band · 🔴 {round(100 - bb_pos, 1)}% of the range remains above. "
+                    f"Zones: 0-20% near lower band, 20-80% mid-range, 80-100% near upper band. "
+                    f"Factual position within the bands, not a signal."
+                )
+
+            tcol2, tcol3, tcol4 = st.columns(3)
             tcol2.metric("ADX (14)", t["adx_14"])
             tcol2.caption("Trend STRENGTH (not direction). >25 conventionally = trending market")
             tcol3.metric("ATR (14)", t["atr_14"])
@@ -1373,11 +1445,10 @@ with tab_swing:
 
             st.markdown("**Bollinger Bands (20, 2σ)**")
             bb = t["bollinger_bands"]
-            bcol1, bcol2, bcol3, bcol4 = st.columns(4)
+            bcol1, bcol2, bcol3 = st.columns(3)
             bcol1.metric("Lower Band", bb["lower_band"])
             bcol2.metric("Middle (SMA20)", bb["middle_band"])
             bcol3.metric("Upper Band", bb["upper_band"])
-            bcol4.metric("Position in Bands", f"{bb['pct_position_in_bands']}%")
 
             # --- Volume Agent ---
             st.markdown("---")
@@ -1451,6 +1522,32 @@ with tab_swing:
                     st.dataframe(sector_df[display_cols], use_container_width=True, hide_index=True)
 
             st.caption(f"ℹ️ {br['disclaimer']}")
+
+    # --- Experimental: NSE Live All-Exchange Volume Feed ---
+    st.markdown("---")
+    st.markdown("### 🧪 Experimental: Live NSE Volume Feed (ALL of NSE, not a fixed list)")
+    st.warning(
+        "⚠️ **Experimental** — this attempts to fetch NSE's own live 'Most Active by "
+        "Volume' data directly, covering the ENTIRE exchange (not the ~65-stock list "
+        "above). This depends on NSE's unofficial public data feed and may not always "
+        "work — if it fails, the Sector-Wise Screener above is the reliable option, or "
+        "search any specific stock symbol directly (works for any real NSE/BSE ticker)."
+    )
+
+    if st.button("Try Live NSE Feed (All Exchange)", use_container_width=True):
+        with st.spinner("Attempting to fetch NSE's live volume feed..."):
+            nse_result = get_nse_most_active_by_volume(20)
+        st.session_state.nse_result = nse_result
+
+    if "nse_result" in st.session_state:
+        nr = st.session_state.nse_result
+        if "error" in nr:
+            st.error(f"⚠️ {nr['error']}")
+        else:
+            st.success(f"Fetched {len(nr['stocks'])} stocks from {nr['source']}")
+            nse_df = pd.DataFrame(nr["stocks"])
+            st.dataframe(nse_df, use_container_width=True, hide_index=True)
+            st.caption(f"ℹ️ {nr['disclaimer']}")
 
     # --- Swing chat section ---
     st.markdown("---")

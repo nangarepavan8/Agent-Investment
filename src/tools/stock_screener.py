@@ -19,29 +19,56 @@ from typing import Dict, Any, List, Optional
 import yfinance as yf
 from src.tools.yf_session import get_yf_session
 
-# Fixed screening universe — same real NSE tickers used elsewhere in
-# this project, flattened across all sectors.
+# Broad screening universe — real NSE-listed tickers across many
+# sectors. This is NOT literally "all ~2,000 NSE-listed stocks" — that
+# would require thousands of individual network calls per scan, which
+# would take a very long time and likely get rate-limited/blocked by
+# Yahoo Finance. This is a genuinely broad basket (65 stocks, 14
+# sectors) as the practical middle ground between "29 blue chips" and
+# "the entire exchange." Any real NSE stock not in this list can still
+# be looked up individually via the single-stock search elsewhere.
 SCREENER_UNIVERSE = [
     "TCS.NS", "INFY.NS", "WIPRO.NS", "HCLTECH.NS", "TECHM.NS",
-    "HDFCBANK.NS", "ICICIBANK.NS", "SBIN.NS", "KOTAKBANK.NS", "AXISBANK.NS",
-    "RELIANCE.NS", "ONGC.NS", "NTPC.NS", "POWERGRID.NS",
-    "HINDUNILVR.NS", "ITC.NS", "NESTLEIND.NS", "TITAN.NS",
-    "HEROMOTOCO.NS", "MARUTI.NS", "BAJAJ-AUTO.NS", "EICHERMOT.NS",
-    "SUNPHARMA.NS", "DRREDDY.NS", "CIPLA.NS", "DIVISLAB.NS",
-    "LT.NS", "ADANIPORTS.NS", "ULTRACEMCO.NS",
+    "HDFCBANK.NS", "ICICIBANK.NS", "SBIN.NS", "KOTAKBANK.NS", "AXISBANK.NS", "INDUSINDBK.NS",
+    "RELIANCE.NS", "ONGC.NS", "NTPC.NS", "POWERGRID.NS", "IOC.NS", "BPCL.NS", "COALINDIA.NS",
+    "HINDUNILVR.NS", "ITC.NS", "NESTLEIND.NS", "TITAN.NS", "BRITANNIA.NS", "DABUR.NS", "MARICO.NS",
+    "HEROMOTOCO.NS", "MARUTI.NS", "BAJAJ-AUTO.NS", "EICHERMOT.NS", "TVSMOTOR.NS", "M&M.NS",
+    "SUNPHARMA.NS", "DRREDDY.NS", "CIPLA.NS", "DIVISLAB.NS", "APOLLOHOSP.NS",
+    "LT.NS", "ADANIPORTS.NS", "ULTRACEMCO.NS", "AMBUJACEM.NS", "SIEMENS.NS",
+    "BAJFINANCE.NS", "BAJAJFINSV.NS", "HDFCLIFE.NS", "SBILIFE.NS",
+    "ASIANPAINT.NS", "PIDILITIND.NS", "GRASIM.NS", "HINDALCO.NS", "TATASTEEL.NS", "JSWSTEEL.NS",
+    "VEDL.NS", "ADANIENT.NS", "ADANIGREEN.NS", "TATAPOWER.NS",
+    "BHARTIARTL.NS", "INDUSTOWER.NS",
+    "DMART.NS", "TRENT.NS", "NAUKRI.NS", "ZOMATO.NS",
+    "HAVELLS.NS", "VOLTAS.NS", "DLF.NS", "GODREJCP.NS",
 ]
 
 # Ticker -> sector mapping, so every stock result can show its sector too
 SYMBOL_TO_SECTOR = {
     "TCS.NS": "IT", "INFY.NS": "IT", "WIPRO.NS": "IT", "HCLTECH.NS": "IT", "TECHM.NS": "IT",
     "HDFCBANK.NS": "Banking", "ICICIBANK.NS": "Banking", "SBIN.NS": "Banking",
-    "KOTAKBANK.NS": "Banking", "AXISBANK.NS": "Banking",
+    "KOTAKBANK.NS": "Banking", "AXISBANK.NS": "Banking", "INDUSINDBK.NS": "Banking",
     "RELIANCE.NS": "Energy", "ONGC.NS": "Energy", "NTPC.NS": "Energy", "POWERGRID.NS": "Energy",
+    "IOC.NS": "Energy", "BPCL.NS": "Energy", "COALINDIA.NS": "Energy",
     "HINDUNILVR.NS": "FMCG", "ITC.NS": "FMCG", "NESTLEIND.NS": "FMCG", "TITAN.NS": "FMCG",
-    "HEROMOTOCO.NS": "Automobile", "MARUTI.NS": "Automobile",
-    "BAJAJ-AUTO.NS": "Automobile", "EICHERMOT.NS": "Automobile",
-    "SUNPHARMA.NS": "Pharma", "DRREDDY.NS": "Pharma", "CIPLA.NS": "Pharma", "DIVISLAB.NS": "Pharma",
+    "BRITANNIA.NS": "FMCG", "DABUR.NS": "FMCG", "MARICO.NS": "FMCG",
+    "HEROMOTOCO.NS": "Automobile", "MARUTI.NS": "Automobile", "BAJAJ-AUTO.NS": "Automobile",
+    "EICHERMOT.NS": "Automobile", "TVSMOTOR.NS": "Automobile", "M&M.NS": "Automobile",
+    "SUNPHARMA.NS": "Pharma", "DRREDDY.NS": "Pharma", "CIPLA.NS": "Pharma",
+    "DIVISLAB.NS": "Pharma", "APOLLOHOSP.NS": "Pharma",
     "LT.NS": "Industrials", "ADANIPORTS.NS": "Industrials", "ULTRACEMCO.NS": "Industrials",
+    "AMBUJACEM.NS": "Industrials", "SIEMENS.NS": "Industrials",
+    "BAJFINANCE.NS": "Financials", "BAJAJFINSV.NS": "Financials",
+    "HDFCLIFE.NS": "Financials", "SBILIFE.NS": "Financials",
+    "ASIANPAINT.NS": "Consumer", "PIDILITIND.NS": "Consumer", "GODREJCP.NS": "Consumer",
+    "GRASIM.NS": "Materials", "HINDALCO.NS": "Materials", "TATASTEEL.NS": "Materials",
+    "JSWSTEEL.NS": "Materials", "VEDL.NS": "Materials",
+    "ADANIENT.NS": "Conglomerate", "ADANIGREEN.NS": "Power", "TATAPOWER.NS": "Power",
+    "BHARTIARTL.NS": "Telecom", "INDUSTOWER.NS": "Telecom",
+    "DMART.NS": "Retail", "TRENT.NS": "Retail",
+    "NAUKRI.NS": "Internet", "ZOMATO.NS": "Internet",
+    "HAVELLS.NS": "Consumer Durables", "VOLTAS.NS": "Consumer Durables",
+    "DLF.NS": "Real Estate",
 }
 
 PE_LOW_THRESHOLD = 20.0

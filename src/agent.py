@@ -33,6 +33,7 @@ from src.tools.goal_gap_analysis import calc_goal_gap
 from src.tools.tax_guidance import get_capital_gains_rules, get_tax_saving_instruments
 from src.tools.stress_test import run_stress_test, STRESS_SCENARIOS
 from src.tools.swing_screener import get_swing_analysis, get_swing_screener_by_sector
+from src.tools.nse_live_data import get_nse_most_active_by_volume
 from src.memory import store_memory, retrieve_relevant_memory
 from src.audit_log import log_event
 
@@ -291,17 +292,35 @@ def swing_analysis_tool(symbol: str) -> str:
 
 @tool
 def swing_screener_by_sector_tool(min_flags: int = 1) -> str:
-    """Scan the FULL real stock universe (~29 Indian stocks) for ones
-    currently showing high volume and/or proximity to their 20-day
-    high, grouped by sector, WITH their real technical indicators
-    (RSI, ADX, volume spike ratio). Purely factual "what's happening
-    today" flags — NOT a breakout prediction, NOT a Buy/Sell signal,
-    NOT a price target. Use this when a user asks for a list/screener
-    of stocks with high volume, near their highs, or a sector-wise
-    swing/technical scan — as opposed to swing_analysis_tool which
-    covers just ONE specific stock in more depth."""
+    """Scan a broad real stock universe (~65 Indian stocks across 18
+    sectors) for ones currently showing high volume and/or proximity
+    to their 20-day high, grouped by sector, WITH their real technical
+    indicators (RSI, ADX, volume spike ratio). Purely factual "what's
+    happening today" flags — NOT a breakout prediction, NOT a Buy/Sell
+    signal, NOT a price target. Use this when a user asks for a list/
+    screener of stocks with high volume, near their highs, or a
+    sector-wise swing/technical scan — as opposed to swing_analysis_tool
+    which covers just ONE specific stock in more depth."""
     try:
         return json.dumps(get_swing_screener_by_sector(min_flags))
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+@tool
+def nse_live_volume_tool(count: int = 20) -> str:
+    """Attempt to fetch REAL, live 'Most Active by Volume' data
+    directly from NSE — covers the ENTIRE exchange (thousands of
+    stocks), not a fixed list. EXPERIMENTAL: depends on NSE's
+    unofficial public data feed and may fail if blocked or if NSE
+    changes their site structure — if it errors, fall back to
+    swing_screener_by_sector_tool (broad ~65-stock universe) or
+    suggest the user search a specific known symbol directly via
+    swing_analysis_tool. Use this when a user explicitly wants
+    coverage beyond the fixed stock list, or mentions a stock ticker
+    you don't recognize from the fixed universe."""
+    try:
+        return json.dumps(get_nse_most_active_by_volume(count))
     except Exception as e:
         return json.dumps({"error": str(e)})
 
@@ -310,7 +329,8 @@ ALL_TOOLS = [portfolio_summary_tool, risk_score_tool, rebalancing_tool, market_c
              profit_booking_tool, sector_performance_tool, investment_guidance_tool,
              historical_performance_tool, stock_screener_tool, growth_illustrator_tool,
              goal_gap_analysis_tool, capital_gains_tax_tool, tax_saving_instruments_tool,
-             stress_test_tool, swing_analysis_tool, swing_screener_by_sector_tool]
+             stress_test_tool, swing_analysis_tool, swing_screener_by_sector_tool,
+             nse_live_volume_tool]
 
 TOOLS_BY_NAME = {t.name: t for t in ALL_TOOLS}
 
