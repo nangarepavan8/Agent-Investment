@@ -35,6 +35,7 @@ from src.tools.stress_test import run_stress_test, STRESS_SCENARIOS
 from src.tools.swing_screener import get_swing_analysis, get_swing_screener_by_sector
 from src.tools.nse_live_data import get_nse_most_active_by_volume
 from src.tools.premarket_briefing import get_premarket_briefing
+from src.tools.gold_analysis import get_gold_analysis
 from src.memory import store_memory, retrieve_relevant_memory
 from src.audit_log import log_event
 
@@ -342,12 +343,28 @@ def premarket_briefing_tool() -> str:
         return json.dumps({"error": str(e)})
 
 
+@tool
+def gold_analysis_tool() -> str:
+    """Get REAL gold price analysis: current price (USD/oz and
+    approximate INR/10g via live unit conversion), real technical
+    indicators (RSI, MACD, EMA, Bollinger, ATR, ADX), a factual
+    indicator tally, real historical change, and Sovereign Gold Bond
+    facts. This does NOT provide a buy/sell price target or
+    prediction — no one can reliably predict gold's future price.
+    Use this when a user asks about gold, gold prices, SGB, or wants
+    gold technical analysis."""
+    try:
+        return json.dumps(get_gold_analysis())
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
 ALL_TOOLS = [portfolio_summary_tool, risk_score_tool, rebalancing_tool, market_context_tool,
              profit_booking_tool, sector_performance_tool, investment_guidance_tool,
              historical_performance_tool, stock_screener_tool, growth_illustrator_tool,
              goal_gap_analysis_tool, capital_gains_tax_tool, tax_saving_instruments_tool,
              stress_test_tool, swing_analysis_tool, swing_screener_by_sector_tool,
-             nse_live_volume_tool, premarket_briefing_tool]
+             nse_live_volume_tool, premarket_briefing_tool, gold_analysis_tool]
 
 TOOLS_BY_NAME = {t.name: t for t in ALL_TOOLS}
 
@@ -544,7 +561,12 @@ own age/amount/risk category instead.
   price target, or confidence score — no one can reliably predict
   short-term price direction, and doing so would fabricate false
   precision. If asked directly for a trading signal, explain that this
-  tool shows real data for the user's own judgment, not a signal."""
+  tool shows real data for the user's own judgment, not a signal.
+- For gold_analysis_tool results: same rules as swing_analysis_tool —
+  present real price/technical/historical data factually, note the
+  INR/10g figure is an approximate conversion (not an exact bullion
+  market rate), and NEVER give a specific buy/sell price level or
+  predict where gold's price will go next."""
 
 
 # Approximate per-token pricing (USD), used only for a rough cost estimate

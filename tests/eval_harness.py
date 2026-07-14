@@ -59,6 +59,7 @@ EVAL_CASES = [
     (None, "Show me the technical indicators and volume for TCS", ["swing_analysis_tool"]),
     (None, "Give me a list of stocks with high volume near their highs, sector wise", ["swing_screener_by_sector_tool"]),
     (None, "What should I check before market opens today?", ["premarket_briefing_tool"]),
+    (None, "Is gold overbought right now? What's the current price?", ["gold_analysis_tool"]),
 ]
 
 

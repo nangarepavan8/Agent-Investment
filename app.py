@@ -29,6 +29,7 @@ from src.tools.tax_guidance import get_capital_gains_rules, get_tax_saving_instr
 from src.tools.swing_screener import get_swing_analysis, get_swing_screener_by_sector
 from src.tools.nse_live_data import get_nse_most_active_by_volume
 from src.tools.premarket_briefing import get_premarket_briefing
+from src.tools.gold_analysis import get_gold_analysis
 
 st.set_page_config(
     page_title="Agentic Investment Research Assistant",
@@ -255,9 +256,9 @@ with st.expander("ℹ️ How this works (architecture)"):
     Fabric, and Azure hosting for production, multi-user deployment.
     """)
 
-tab_chat, tab_dashboard, tab_alerts, tab_audit, tab_investor, tab_screener, tab_tax, tab_swing = st.tabs(
+tab_chat, tab_dashboard, tab_alerts, tab_audit, tab_investor, tab_screener, tab_tax, tab_swing, tab_gold = st.tabs(
     ["💬 Chat", "📊 Dashboard", "🔔 Portfolio Alerts", "📋 Audit Log", "🧑‍💼 For Investors",
-     "🔎 Stock Screener", "💰 Taxation", "🔄 Swing"]
+     "🔎 Stock Screener", "💰 Taxation", "🔄 Swing", "🪙 Gold"]
 )
 
 # ---------------------------------------------------------------------------
@@ -1564,6 +1565,14 @@ with tab_swing:
             if not br["sectors"]:
                 st.info("No stocks currently match — this reflects real current market conditions, try again shortly.")
             else:
+                # --- Compact view: just the symbols, grouped by sector ---
+                st.markdown("**Quick list — flagged stocks by sector:**")
+                for sector, stocks in br["sectors"].items():
+                    symbols = ", ".join(s["symbol"] for s in stocks)
+                    st.markdown(f"- **{sector}**: {symbols}")
+
+                st.markdown("---")
+                st.markdown("**Full detail:**")
                 for sector, stocks in br["sectors"].items():
                     st.markdown(f"**{sector}**")
                     sector_df = pd.DataFrame(stocks)
@@ -1652,6 +1661,156 @@ with tab_swing:
             st.markdown(answer)
 
         st.session_state.swing_chat_messages.append({
+            "role": "assistant", "content": answer, "tool_calls": tool_calls,
+            "latency_seconds": latency_seconds, "input_tokens": input_tokens,
+            "output_tokens": output_tokens, "approx_cost_usd": approx_cost_usd,
+        })
+        st.rerun()
+
+# ---------------------------------------------------------------------------
+# GOLD TAB - real gold price, real technical indicators (reusing the same
+# tested functions as the Swing tab), real historical change, and real
+# Sovereign Gold Bond facts. DELIBERATELY NO buy/sell price target, no
+# "AI predicts" signal, no specific entry/exit level - same honesty
+# pattern as the rest of this project.
+# ---------------------------------------------------------------------------
+with tab_gold:
+    st.subheader("🪙 Gold Analysis — Real Price & Technical Data")
+    st.error(
+        "⚠️ **This is NOT a buy/sell price target or prediction.** No one can reliably "
+        "predict gold's future price. This shows REAL current price, real technical "
+        "indicators, and real historical change so you can apply your own judgment."
+    )
+
+    if st.button("Get Gold Analysis", use_container_width=True):
+        with st.spinner("Fetching real gold price and calculating indicators..."):
+            gold_result = get_gold_analysis()
+        st.session_state.gold_result = gold_result
+        log_event("gold_analysis_run", None, {})
+
+    if "gold_result" in st.session_state:
+        g = st.session_state.gold_result
+
+        if "error" in g:
+            st.warning(f"⚠️ {g['error']}")
+        else:
+            gcol1, gcol2 = st.columns(2)
+            gcol1.metric("Gold Price (USD/oz)", f"${g['current_price_usd_per_oz']:,.2f}")
+            if g["current_price_inr_per_10g_approx"]:
+                gcol2.metric("Approx. INR/10g", f"₹{g['current_price_inr_per_10g_approx']:,.2f}")
+                gcol2.caption("Approximate conversion — excludes import duty, GST, dealer premiums")
+
+            # --- Today's Indicator Scoreboard (same honest tally as Swing) ---
+            tally = g["indicator_tally"]
+            st.markdown("### Today's Indicator Scoreboard")
+            st.markdown(f"""
+            <div style="display:flex; width:100%; height:34px; border-radius:8px; overflow:hidden; margin-bottom:6px;">
+                <div style="width:{tally['bullish_pct']}%; background:#2ECC71; display:flex; align-items:center;
+                            justify-content:center; color:white; font-size:0.9rem; font-weight:700;">
+                    {tally['bullish_pct']}%
+                </div>
+                <div style="width:{tally['bearish_pct']}%; background:#E74C3C; display:flex; align-items:center;
+                            justify-content:center; color:white; font-size:0.9rem; font-weight:700;">
+                    {tally['bearish_pct']}%
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            st.error(
+                f"⚠️ **Factual TALLY, NOT a Buy/Sell signal.** {tally['bullish_count']} of "
+                f"{tally['total_indicators']} real indicators are currently bullish-leaning "
+                f"TODAY — describes right now, not what happens next."
+            )
+
+            # --- Real technical indicators ---
+            st.markdown("### 📈 Technical Indicators (Real, Calculated)")
+            t = g["technical"]
+            tcol1, tcol2, tcol3 = st.columns(3)
+            tcol1.metric("RSI (14)", t["rsi_14"])
+            tcol2.metric("ADX (14)", t["adx_14"])
+            tcol3.metric("ATR (14)", t["atr_14"])
+
+            ecol1, ecol2, ecol3 = st.columns(3)
+            ecol1.metric("EMA 20", t["ema_status"]["ema20"])
+            ecol2.metric("EMA 50", t["ema_status"]["ema50"])
+            ecol3.metric("EMA20 vs EMA50", "20 above 50" if t["ema_status"]["ema20_above_ema50"] else "20 below 50")
+
+            # --- Real historical change ---
+            st.markdown("### 📊 Historical Change (Real, Backward-Looking)")
+            hc = g["historical_change_pct"]
+            hcol1, hcol2, hcol3 = st.columns(3)
+            hcol1.metric("1 Month", f"{hc['1_month']:+.2f}%")
+            hcol2.metric("3 Months", f"{hc['3_month']:+.2f}%")
+            hcol3.metric("6 Months", f"{hc['6_month']:+.2f}%")
+
+            # --- Sovereign Gold Bond facts ---
+            st.markdown("---")
+            st.markdown("### 🏛️ Sovereign Gold Bond (SGB) — Real Facts")
+            sgb = g["sgb_facts"]
+            st.caption(sgb["what_it_is"])
+            sgcol1, sgcol2 = st.columns(2)
+            with sgcol1:
+                st.markdown("**Benefits**")
+                for b in sgb["benefits"]:
+                    st.markdown(f"- {b}")
+            with sgcol2:
+                st.markdown("**Tradeoffs**")
+                for tr in sgb["tradeoffs"]:
+                    st.markdown(f"- {tr}")
+
+            st.markdown("---")
+            st.error(f"⚠️ {g['disclaimer']}")
+
+    # --- Gold chat section ---
+    st.markdown("---")
+    st.markdown("### Ask About Gold")
+    st.caption("e.g. \"Is gold overbought right now?\", \"What are SGB tax benefits?\" — answered from real data, never a price target.")
+
+    if "gold_chat_messages" not in st.session_state:
+        st.session_state.gold_chat_messages = []
+
+    for msg in st.session_state.gold_chat_messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+            if msg["role"] == "assistant" and (msg.get("tool_calls") or msg.get("latency_seconds") is not None):
+                with st.expander("🧠 Reasoning"):
+                    for tc in msg.get("tool_calls", []):
+                        st.markdown(f"- Called `{tc['name']}` with `{tc['args']}`")
+                    if msg.get("latency_seconds") is not None:
+                        st.caption(
+                            f"⏱️ {msg['latency_seconds']}s · 🔢 {msg.get('input_tokens', 0)}+{msg.get('output_tokens', 0)} tokens "
+                            f"· 💵 ~${msg.get('approx_cost_usd', 0):.5f}"
+                        )
+
+    gold_question = st.chat_input("Ask about gold prices, indicators, or SGB...", key="gold_chat_input")
+
+    if gold_question:
+        st.session_state.gold_chat_messages.append({"role": "user", "content": gold_question})
+        with st.chat_message("user"):
+            st.markdown(gold_question)
+
+        if not check_query_budget():
+            st.stop()
+
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
+                try:
+                    result = run_agent(gold_question, client_id=None, verbose=False)
+                    answer = result["answer"]
+                    tool_calls = result["tool_calls"]
+                    latency_seconds = result.get("latency_seconds")
+                    input_tokens = result.get("input_tokens", 0)
+                    output_tokens = result.get("output_tokens", 0)
+                    approx_cost_usd = result.get("approx_cost_usd", 0)
+                except Exception as e:
+                    answer = f"⚠️ Something went wrong: {e}"
+                    tool_calls = []
+                    latency_seconds = None
+                    input_tokens = 0
+                    output_tokens = 0
+                    approx_cost_usd = 0
+            st.markdown(answer)
+
+        st.session_state.gold_chat_messages.append({
             "role": "assistant", "content": answer, "tool_calls": tool_calls,
             "latency_seconds": latency_seconds, "input_tokens": input_tokens,
             "output_tokens": output_tokens, "approx_cost_usd": approx_cost_usd,
