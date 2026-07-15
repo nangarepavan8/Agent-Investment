@@ -12,7 +12,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 
-from src.agent import run_agent, generate_sector_wise_suggestions, generate_client_executive_summary
+from src.agent import run_agent, generate_sector_wise_suggestions, generate_client_executive_summary, generate_news_digest
 from src.tools.data_loader import load_clients
 from src.tools.portfolio_summary import get_portfolio_summary
 from src.tools.risk_score import calc_risk_score
@@ -30,6 +30,9 @@ from src.tools.swing_screener import get_swing_analysis, get_swing_screener_by_s
 from src.tools.nse_live_data import get_nse_most_active_by_volume
 from src.tools.premarket_briefing import get_premarket_briefing
 from src.tools.gold_analysis import get_gold_analysis
+from src.tools.mutual_fund_data import search_mutual_funds, calc_sip_future_value, MUTUAL_FUND_EDUCATION
+from src.tools.mutual_fund_analysis import get_mutual_fund_historical_returns
+from src.tools.investing_news import get_aggregated_investing_news
 
 st.set_page_config(
     page_title="Agentic Investment Research Assistant",
@@ -256,9 +259,9 @@ with st.expander("ℹ️ How this works (architecture)"):
     Fabric, and Azure hosting for production, multi-user deployment.
     """)
 
-tab_chat, tab_dashboard, tab_alerts, tab_audit, tab_investor, tab_screener, tab_tax, tab_swing, tab_gold = st.tabs(
+tab_chat, tab_dashboard, tab_alerts, tab_audit, tab_investor, tab_screener, tab_tax, tab_swing, tab_gold, tab_mf, tab_news = st.tabs(
     ["💬 Chat", "📊 Dashboard", "🔔 Portfolio Alerts", "📋 Audit Log", "🧑‍💼 For Investors",
-     "🔎 Stock Screener", "💰 Taxation", "🔄 Swing", "🪙 Gold"]
+     "🔎 Stock Screener", "💰 Taxation", "🔄 Swing", "🪙 Gold", "📑 Mutual Funds", "📰 News"]
 )
 
 # ---------------------------------------------------------------------------
@@ -1545,6 +1548,11 @@ with tab_swing:
         "snapshot of today only. Whether a real breakout follows cannot be predicted."
     )
 
+    high_volume_only = st.checkbox(
+        "Show ONLY stocks with a real volume spike (≥2x normal) — isolates just the high-volume signal",
+        value=False, key="high_volume_only_filter",
+    )
+
     if st.button("Run Full Sector-Wise Screener", use_container_width=True):
         with st.spinner("Scanning the real stock universe (this takes a moment)..."):
             batch_result = get_swing_screener_by_sector()
@@ -1557,23 +1565,35 @@ with tab_swing:
         if "error" in br:
             st.warning(f"⚠️ {br['error']}")
         else:
-            st.success(
-                f"{br['total_flagged']} of {br['universe_size']} stocks currently flagged "
-                f"(high volume, near 20-day high, strong trend, or above both EMAs)."
-            )
+            # Apply the High Volume Only filter if checked — isolates just
+            # the real volume-spike flag, filtering out the sectors dict
+            display_sectors = br["sectors"]
+            if high_volume_only:
+                display_sectors = {}
+                for sector, stocks in br["sectors"].items():
+                    high_vol_stocks = [s for s in stocks if "High Volume" in s.get("flags", [])]
+                    if high_vol_stocks:
+                        display_sectors[sector] = high_vol_stocks
+                total_shown = sum(len(v) for v in display_sectors.values())
+                st.success(f"{total_shown} stocks with a REAL volume spike ≥2x today (isolated from other flags).")
+            else:
+                st.success(
+                    f"{br['total_flagged']} of {br['universe_size']} stocks currently flagged "
+                    f"(high volume, near 20-day high, strong trend, or above both EMAs)."
+                )
 
-            if not br["sectors"]:
+            if not display_sectors:
                 st.info("No stocks currently match — this reflects real current market conditions, try again shortly.")
             else:
                 # --- Compact view: just the symbols, grouped by sector ---
                 st.markdown("**Quick list — flagged stocks by sector:**")
-                for sector, stocks in br["sectors"].items():
+                for sector, stocks in display_sectors.items():
                     symbols = ", ".join(s["symbol"] for s in stocks)
                     st.markdown(f"- **{sector}**: {symbols}")
 
                 st.markdown("---")
                 st.markdown("**Full detail:**")
-                for sector, stocks in br["sectors"].items():
+                for sector, stocks in display_sectors.items():
                     st.markdown(f"**{sector}**")
                     sector_df = pd.DataFrame(stocks)
                     sector_df["flags"] = sector_df["flags"].apply(lambda f: ", ".join(f) if f else "—")
@@ -1815,4 +1835,221 @@ with tab_gold:
             "latency_seconds": latency_seconds, "input_tokens": input_tokens,
             "output_tokens": output_tokens, "approx_cost_usd": approx_cost_usd,
         })
+        st.rerun()
+
+# ---------------------------------------------------------------------------
+# MUTUAL FUNDS TAB - real AMFI NAV search (experimental, untested vs. a
+# known block like NSE), real SIP calculator, real education content, real
+# tax rules (reused from tax_guidance.py). No specific fund recommendations
+# or performance predictions.
+# ---------------------------------------------------------------------------
+with tab_mf:
+    st.subheader("📑 Mutual Funds")
+
+    st.markdown("### 🔍 Search Real Mutual Fund NAV (AMFI)")
+    st.warning(
+        "⚠️ **Experimental** — fetches REAL, current NAV directly from AMFI's official "
+        "public data feed. Untested against a live network in development (unlike NSE, "
+        "no confirmed block — this may work well). If it fails, the SIP calculator and "
+        "education content below remain fully reliable regardless."
+    )
+
+    mf_search_term = st.text_input("Search by fund name (e.g. 'HDFC', 'Nifty Index', 'ELSS')", value="Nifty Index")
+    if st.button("Search Mutual Funds", use_container_width=True):
+        with st.spinner("Fetching real NAV data from AMFI..."):
+            mf_result = search_mutual_funds(mf_search_term)
+        st.session_state.mf_search_result = mf_result
+
+    if "mf_search_result" in st.session_state:
+        mfr = st.session_state.mf_search_result
+        if "error" in mfr:
+            st.error(f"⚠️ {mfr['error']}")
+        else:
+            st.success(f"Found {len(mfr['results'])} matching schemes (of {mfr['total_schemes_in_source']} total)")
+            if mfr["results"]:
+                mf_df = pd.DataFrame(mfr["results"])
+                st.dataframe(mf_df, use_container_width=True, hide_index=True)
+            st.caption(f"ℹ️ {mfr['disclaimer']}")
+
+    st.markdown("---")
+    st.markdown("### 📈 Real Historical Returns (Backward-Looking Only)")
+    st.caption(
+        "Enter a scheme code from the search results above to see its REAL historical "
+        "1/3/5-year returns. NOT a prediction of future performance."
+    )
+    mf_scheme_code = st.text_input("Scheme code (from search results above)", value="119551")
+    if st.button("Get Historical Returns", use_container_width=True):
+        with st.spinner("Fetching real historical NAV data..."):
+            mf_hist_result = get_mutual_fund_historical_returns(mf_scheme_code)
+        st.session_state.mf_hist_result = mf_hist_result
+
+    if "mf_hist_result" in st.session_state:
+        mhr = st.session_state.mf_hist_result
+        if "error" in mhr:
+            st.warning(f"⚠️ {mhr['error']}")
+        else:
+            st.success(f"{mhr['scheme_name']} — Current NAV: ₹{mhr['current_nav']:,.4f} (as of {mhr['as_of_date']})")
+            returns = mhr.get("historical_returns_pct", {})
+            if returns:
+                rcol1, rcol2, rcol3 = st.columns(3)
+                if "1_year" in returns:
+                    rcol1.metric("1 Year", f"{returns['1_year']:+.2f}%")
+                if "3_year" in returns:
+                    rcol2.metric("3 Year", f"{returns['3_year']:+.2f}%")
+                if "5_year" in returns:
+                    rcol3.metric("5 Year", f"{returns['5_year']:+.2f}%")
+            st.caption(f"ℹ️ {mhr['disclaimer']}")
+
+    st.markdown("---")
+    st.markdown("### 💰 SIP (Systematic Investment Plan) Calculator")
+    st.caption("Real future-value math with a clearly-assumed return rate — not a prediction.")
+
+    sip_col1, sip_col2, sip_col3 = st.columns(3)
+    sip_monthly = sip_col1.number_input("Monthly SIP amount (₹)", min_value=500, value=10000, step=500)
+    sip_years = sip_col2.slider("Years", min_value=1, max_value=30, value=15)
+    sip_rate = sip_col3.slider("Assumed annual return (%)", min_value=4.0, max_value=15.0, value=10.0, step=0.5)
+
+    if st.button("Calculate SIP Future Value", use_container_width=True):
+        sip_result = calc_sip_future_value(sip_monthly, sip_years, sip_rate)
+        st.session_state.sip_result = sip_result
+        log_event("sip_calculated", None, {"monthly": sip_monthly, "years": sip_years})
+
+    if "sip_result" in st.session_state:
+        sr = st.session_state.sip_result
+        scol1, scol2, scol3 = st.columns(3)
+        scol1.metric("Total Invested", f"₹{sr['total_invested']:,.0f}")
+        scol2.metric("Projected Value", f"₹{sr['projected_value']:,.0f}")
+        scol3.metric("Estimated Gains", f"₹{sr['estimated_gains']:,.0f}")
+        st.warning(f"⚠️ {sr['disclaimer']}")
+
+    st.markdown("---")
+    st.markdown("### 📚 Mutual Fund Education")
+    st.caption(MUTUAL_FUND_EDUCATION["what_is_nav"])
+
+    st.markdown("**Fund Categories**")
+    for category, description in MUTUAL_FUND_EDUCATION["fund_categories"].items():
+        st.markdown(f"- **{category}**: {description}")
+
+    edcol1, edcol2 = st.columns(2)
+    with edcol1:
+        st.markdown("**Direct vs. Regular Plans**")
+        st.caption(MUTUAL_FUND_EDUCATION["direct_vs_regular"])
+        st.markdown("**Expense Ratio**")
+        st.caption(MUTUAL_FUND_EDUCATION["expense_ratio"])
+    with edcol2:
+        st.markdown("**Exit Load**")
+        st.caption(MUTUAL_FUND_EDUCATION["exit_load"])
+        st.markdown("**Tax Treatment**")
+        st.caption("Equity mutual funds are taxed like equity shares (see 💰 Taxation tab); debt mutual funds are taxed at your income slab rate.")
+
+    # --- Mutual fund chat section ---
+    st.markdown("---")
+    st.markdown("### Ask About Mutual Funds")
+    st.caption("e.g. \"What's a good SIP amount for ₹50L in 10 years?\", \"ELSS vs PPF for tax saving?\"")
+
+    if "mf_chat_messages" not in st.session_state:
+        st.session_state.mf_chat_messages = []
+
+    for msg in st.session_state.mf_chat_messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+            if msg["role"] == "assistant" and msg.get("tool_calls"):
+                with st.expander("🧠 Reasoning"):
+                    for tc in msg["tool_calls"]:
+                        st.markdown(f"- Called `{tc['name']}` with `{tc['args']}`")
+
+    mf_question = st.chat_input("Ask about mutual funds, SIPs, or tax-saving funds...", key="mf_chat_input")
+
+    if mf_question:
+        st.session_state.mf_chat_messages.append({"role": "user", "content": mf_question})
+        with st.chat_message("user"):
+            st.markdown(mf_question)
+
+        if not check_query_budget():
+            st.stop()
+
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
+                try:
+                    result = run_agent(mf_question, client_id=None, verbose=False)
+                    answer = result["answer"]
+                    tool_calls = result["tool_calls"]
+                except Exception as e:
+                    answer = f"⚠️ Something went wrong: {e}"
+                    tool_calls = []
+            st.markdown(answer)
+
+        st.session_state.mf_chat_messages.append({"role": "assistant", "content": answer, "tool_calls": tool_calls})
+        st.rerun()
+
+# ---------------------------------------------------------------------------
+# NEWS TAB - real headlines from multiple real tickers, AI-organized into a
+# readable digest. GPT-4o synthesizes real data, never invents news.
+# ---------------------------------------------------------------------------
+with tab_news:
+    st.subheader("📰 Investing News Digest")
+    st.info(
+        "ℹ️ Real news headlines, fetched from live market data sources across stocks, "
+        "gold, and the broader market — organized by AI into a readable digest. This "
+        "app's AI does NOT have live web browsing; every headline shown is real, "
+        "already-fetched data, never generated or invented."
+    )
+
+    if st.button("Get Today's Investing News Digest", use_container_width=True):
+        with st.spinner("Fetching real news headlines..."):
+            raw_news = get_aggregated_investing_news()
+        with st.spinner("Organizing into a readable digest..."):
+            digest = generate_news_digest(raw_news.get("headlines_by_category", {}))
+        st.session_state.news_digest = digest
+        st.session_state.news_raw = raw_news
+        log_event("news_digest_generated", None, {"categories_fetched": raw_news.get("total_categories_fetched")})
+
+    if "news_digest" in st.session_state:
+        st.markdown(st.session_state.news_digest)
+        with st.expander("📊 View the real underlying headlines used above"):
+            raw = st.session_state.news_raw
+            for category, headlines in raw.get("headlines_by_category", {}).items():
+                st.markdown(f"**{category}**")
+                for h in headlines:
+                    st.markdown(f"- {h}")
+        st.caption(f"ℹ️ {raw.get('disclaimer', '')}")
+
+    # --- News chat section ---
+    st.markdown("---")
+    st.markdown("### Ask About Recent News")
+    st.caption("e.g. \"What's the latest gold news?\", \"Any recent banking sector news?\"")
+
+    if "news_chat_messages" not in st.session_state:
+        st.session_state.news_chat_messages = []
+
+    for msg in st.session_state.news_chat_messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+            if msg["role"] == "assistant" and msg.get("tool_calls"):
+                with st.expander("🧠 Reasoning"):
+                    for tc in msg["tool_calls"]:
+                        st.markdown(f"- Called `{tc['name']}` with `{tc['args']}`")
+
+    news_question = st.chat_input("Ask about recent investing news...", key="news_chat_input")
+
+    if news_question:
+        st.session_state.news_chat_messages.append({"role": "user", "content": news_question})
+        with st.chat_message("user"):
+            st.markdown(news_question)
+
+        if not check_query_budget():
+            st.stop()
+
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
+                try:
+                    result = run_agent(news_question, client_id=None, verbose=False)
+                    answer = result["answer"]
+                    tool_calls = result["tool_calls"]
+                except Exception as e:
+                    answer = f"⚠️ Something went wrong: {e}"
+                    tool_calls = []
+            st.markdown(answer)
+
+        st.session_state.news_chat_messages.append({"role": "assistant", "content": answer, "tool_calls": tool_calls})
         st.rerun()

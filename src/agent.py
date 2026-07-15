@@ -36,6 +36,9 @@ from src.tools.swing_screener import get_swing_analysis, get_swing_screener_by_s
 from src.tools.nse_live_data import get_nse_most_active_by_volume
 from src.tools.premarket_briefing import get_premarket_briefing
 from src.tools.gold_analysis import get_gold_analysis
+from src.tools.mutual_fund_data import search_mutual_funds, calc_sip_future_value, MUTUAL_FUND_EDUCATION
+from src.tools.mutual_fund_analysis import get_mutual_fund_historical_returns
+from src.tools.investing_news import get_aggregated_investing_news
 from src.memory import store_memory, retrieve_relevant_memory
 from src.audit_log import log_event
 
@@ -359,12 +362,86 @@ def gold_analysis_tool() -> str:
         return json.dumps({"error": str(e)})
 
 
+@tool
+def mutual_fund_historical_returns_tool(scheme_code: str) -> str:
+    """Get REAL historical 1/3/5-year returns for a specific mutual
+    fund scheme (use mutual_fund_search_tool first to find the scheme
+    code). Backward-looking only, NOT a prediction of future fund
+    performance. Use this when a user asks how a specific mutual fund
+    has performed historically."""
+    try:
+        return json.dumps(get_mutual_fund_historical_returns(scheme_code))
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+@tool
+def mutual_fund_search_tool(keyword: str) -> str:
+    """Search REAL, current mutual fund NAV data sourced directly from
+    AMFI (Association of Mutual Funds in India) — covers actual Indian
+    mutual fund schemes, not invented data. EXPERIMENTAL: depends on
+    AMFI's public data feed staying available. Use this when a user
+    asks to find/look up a specific mutual fund by name or keyword
+    (e.g. "HDFC", "Nifty Index", "ELSS")."""
+    try:
+        return json.dumps(search_mutual_funds(keyword))
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+@tool
+def sip_calculator_tool(monthly_amount: float, years: float, assumed_annual_return_pct: float = 10.0) -> str:
+    """Calculate the real future value of a monthly SIP (Systematic
+    Investment Plan) using standard annuity math, with a CLEARLY-
+    ASSUMED annual return rate (not a prediction). Use this when a
+    user asks what their SIP will be worth, wants to plan a mutual
+    fund SIP, or asks about SIP returns."""
+    try:
+        return json.dumps(calc_sip_future_value(monthly_amount, years, assumed_annual_return_pct))
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+@tool
+def mutual_fund_education_tool() -> str:
+    """Get general educational facts about mutual funds: NAV, fund
+    categories (equity/debt/hybrid/index/ELSS), direct vs. regular
+    plans, expense ratio, and exit load. General education, not
+    advice about any specific fund. Use this when a user asks how
+    mutual funds work, what NAV means, or general mutual fund
+    concepts."""
+    try:
+        return json.dumps(MUTUAL_FUND_EDUCATION)
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+@tool
+def investing_news_tool() -> str:
+    """Get an AI-written news digest covering broad market, gold, and
+    major stock sectors — built ONLY from real, currently-fetched news
+    headlines (never invented or generated from training knowledge).
+    Use this when a user asks for investing news, market news, or
+    what's happening in stocks/gold/mutual funds recently."""
+    try:
+        aggregated = get_aggregated_investing_news()
+        digest = generate_news_digest(aggregated["headlines_by_category"])
+        return json.dumps({
+            "digest": digest,
+            "raw_headlines": aggregated["headlines_by_category"],
+        })
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
 ALL_TOOLS = [portfolio_summary_tool, risk_score_tool, rebalancing_tool, market_context_tool,
              profit_booking_tool, sector_performance_tool, investment_guidance_tool,
              historical_performance_tool, stock_screener_tool, growth_illustrator_tool,
              goal_gap_analysis_tool, capital_gains_tax_tool, tax_saving_instruments_tool,
              stress_test_tool, swing_analysis_tool, swing_screener_by_sector_tool,
-             nse_live_volume_tool, premarket_briefing_tool, gold_analysis_tool]
+             nse_live_volume_tool, premarket_briefing_tool, gold_analysis_tool,
+             mutual_fund_search_tool, mutual_fund_historical_returns_tool,
+             sip_calculator_tool, mutual_fund_education_tool, investing_news_tool]
 
 TOOLS_BY_NAME = {t.name: t for t in ALL_TOOLS}
 
@@ -566,7 +643,15 @@ own age/amount/risk category instead.
   present real price/technical/historical data factually, note the
   INR/10g figure is an approximate conversion (not an exact bullion
   market rate), and NEVER give a specific buy/sell price level or
-  predict where gold's price will go next."""
+  predict where gold's price will go next.
+- For sip_calculator_tool and mutual fund questions: same rule as
+  goal_gap_analysis_tool — state the assumed return rate explicitly,
+  never drop that qualifier, and never claim a specific fund will
+  achieve any particular return.
+- For investing_news_tool and news digest results: present only the
+  REAL headlines given — never add invented headlines or claim
+  knowledge of events not in the data. Never turn news into a trading
+  signal or prediction."""
 
 
 # Approximate per-token pricing (USD), used only for a rough cost estimate
@@ -844,6 +929,50 @@ def generate_client_executive_summary(client_id: str) -> Dict[str, Any]:
         "summary_text": response.content,
         "raw_data": raw_data,
     }
+
+
+NEWS_DIGEST_PROMPT = """You are writing an investing news digest for an
+advisor/investor, based ONLY on the real news headlines provided below.
+
+STRICT RULES:
+- Every claim must come from the headlines given — never invent a fact,
+  detail, or implication not present in the actual headline text.
+- Organize by category (Broad Market, Gold, and each stock sector given).
+- For each category with headlines, write 1-2 sentences summarizing what
+  the real headlines say — do not just repeat headlines verbatim, but do
+  not add speculation or interpretation beyond what's stated.
+- NEVER add investment advice, predictions, or "this means you should..."
+  commentary. This is a factual news summary, not analysis or advice.
+- If a category has no headlines, omit it entirely — do not say "no news."
+- Keep the whole digest concise — a few sentences per category, not paragraphs.
+
+REAL HEADLINES BY CATEGORY:
+{headlines_json}
+
+Write the categorized news digest now."""
+
+
+def generate_news_digest(headlines_by_category: dict) -> str:
+    """
+    Generate an AI-written news digest, organized by category,
+    summarizing REAL fetched headlines — explicitly not adding
+    speculation, predictions, or advice. Same synthesis-only pattern
+    as generate_sector_wise_suggestions() and
+    generate_client_executive_summary().
+
+    Args:
+        headlines_by_category: output of get_aggregated_investing_news()["headlines_by_category"]
+
+    Returns:
+        AI-written digest text (str)
+    """
+    if not headlines_by_category:
+        return "No real news headlines were available to summarize right now — try again later."
+
+    llm = ChatOpenAI(model=OPENAI_MODEL, api_key=OPENAI_API_KEY, temperature=0.2)
+    prompt = NEWS_DIGEST_PROMPT.format(headlines_json=json.dumps(headlines_by_category, indent=2))
+    response = llm.invoke([HumanMessage(content=prompt)])
+    return response.content
 
 
 if __name__ == "__main__":

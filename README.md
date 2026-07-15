@@ -1390,6 +1390,89 @@ streamlit run app.py
 Open "🪙 Gold" → Get Gold Analysis → note the indicator scoreboard,
 real SGB facts, and the complete absence of any price target.
 
+## Stretch Features, Round 29: Mutual Funds Tab + News Tab
+
+**Two new tabs, both using the same "real data + honest AI synthesis"
+pattern established throughout this project.**
+
+**1. "📑 Mutual Funds" tab** (`src/tools/mutual_fund_data.py`):
+- **Real NAV search** sourced directly from AMFI's official public
+  daily NAV file — genuinely different situation from the earlier NSE
+  attempt: my sandbox blocked this domain outright (never reached
+  AMFI itself), unlike NSE where I confirmed a real 403 from NSE's own
+  anti-bot system even with browser impersonation. This is honestly
+  untested rather than known-to-fail — flagged as experimental, but
+  more promising than NSE.
+- **Real SIP calculator** — same annuity math as `goal_gap_analysis.py`,
+  verified against the exact same test case (₹10k/month, 15 years,
+  12% assumed return → ₹50,45,760 projected, confirmed matching).
+- **Real education content** (NAV, fund categories, direct vs. regular,
+  expense ratio, exit load) and real tax rules (reused from
+  `tax_guidance.py`, zero duplication).
+- A dedicated Mutual Funds chat section.
+
+**2. "📰 News" tab** (`src/tools/investing_news.py`):
+- Fetches REAL headlines from 7 real tickers (Nifty 50, Gold, and one
+  representative stock per major sector) via yfinance's `.news`
+  property — the exact same mechanism already proven reliable
+  elsewhere in this project (`market_context.py`, `swing_screener.py`).
+- GPT-4o organizes these REAL headlines into a readable digest
+  (`generate_investing_news_digest()` in `agent.py`) — same safe
+  synthesis pattern as the sector-wise AI suggestions and executive
+  summary features. **Explicitly clarified in the UI**: this app's
+  GPT-4o has no live web browsing — "AI news" here always means real,
+  already-fetched headlines organized into prose, never generated
+  from the model's own training knowledge.
+- Raw underlying headlines viewable in an expander for full
+  transparency.
+
+Test it:
+```bash
+python -m src.tools.mutual_fund_data
+python -m src.tools.investing_news
+streamlit run app.py
+```
+Open "📑 Mutual Funds" and "📰 News" — try the SIP calculator (fully
+reliable, offline-verified math) regardless of whether the AMFI/news
+fetches succeed on your network.
+
+## Stretch Features, Round 30: Mutual Fund Historical Returns + Duplicate-Work Cleanup
+
+**A real duplicate-work issue was found and fixed** while adding a new
+mutual fund historical-returns feature on top of Round 29: my own
+additions had accidentally created duplicate tool definitions in
+`agent.py` (`mutual_fund_search_tool`, `mutual_fund_education_tool`,
+and the news-digest prompt/function each existed twice) AND — more
+seriously — overwritten Round 29's working `investing_news.py` with a
+different function signature, which would have broken `app.py`'s News
+tab at runtime.
+
+**Fixed properly:**
+- Removed all duplicate tool definitions in `agent.py`
+- Fixed `app.py`'s News tab and its imports to match the function
+  names/signatures actually on disk, rather than the orphaned originals
+- Verified with a full-codebase search (`grep -rn`) that zero
+  references to the old function names remain anywhere
+
+**Kept Round 29's solid pre-existing work as the foundation** —
+`mutual_fund_data.py`'s real AMFI NAV search, real SIP calculator, and
+education content were correct and untouched.
+
+**Added the one genuinely new capability**: `get_mutual_fund_historical_returns()`
+(`src/tools/mutual_fund_analysis.py`) — real 1/3/5-year returns for a
+specific scheme via mfapi.in's historical NAV data, backward-looking
+only, wired into the Mutual Funds tab right after the search section.
+
+Test it:
+```bash
+python -m src.tools.mutual_fund_analysis
+streamlit run app.py
+python tests/eval_harness.py   # now 32 cases
+```
+Open "📑 Mutual Funds" → search for a fund → note the new "Real
+Historical Returns" section using the scheme code from search results.
+Open "📰 News" and confirm no import errors appear.
+
 ## Roadmap
 
 | Day | Milestone |
@@ -1432,5 +1515,7 @@ real SGB facts, and the complete absence of any price target.
 | Stretch 26 | Today's Indicator Scoreboard — honest colored tally, not a Buy/Sell confidence score ✅ |
 | Stretch 27 | Pre-Market Briefing — real overnight global cues, not a "boom" prediction ✅ |
 | Stretch 28 | Gold tab (real price/indicators/SGB facts, no price target) + simplified stock list ✅ |
+| Stretch 29 | Mutual Funds tab (real AMFI NAV, SIP calculator, education) + News tab (real headlines, AI-organized) ✅ |
+| Stretch 30 | Mutual fund historical returns + fixed duplicate-work regression (News tab) ✅ |
 
 🎉 **Build complete.** See `DEMO_SCRIPT.md` for your presentation guide.

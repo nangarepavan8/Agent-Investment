@@ -60,6 +60,10 @@ EVAL_CASES = [
     (None, "Give me a list of stocks with high volume near their highs, sector wise", ["swing_screener_by_sector_tool"]),
     (None, "What should I check before market opens today?", ["premarket_briefing_tool"]),
     (None, "Is gold overbought right now? What's the current price?", ["gold_analysis_tool"]),
+    (None, "What SIP amount do I need monthly to reach 50 lakhs in 10 years?", ["sip_calculator_tool"]),
+    (None, "What is NAV and how do mutual fund categories work?", ["mutual_fund_education_tool"]),
+    (None, "How has scheme code 119551 performed over the past 3 years?", ["mutual_fund_historical_returns_tool"]),
+    (None, "What's the latest investing news today?", ["investing_news_tool"]),
 ]
 
 

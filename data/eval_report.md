@@ -1,8 +1,8 @@
 # Agent Evaluation Report
 
-Generated: 2026-07-13T12:15:12
+Generated: 2026-07-15T15:44:56
 
-**Score: 22/25 passed (88.0%)**
+**Score: 27/32 passed (84.4%)**
 
 | Query | Client | Expected Tool(s) | Actual Tool(s) | Result |
 |---|---|---|---|---|
@@ -29,5 +29,12 @@ Generated: 2026-07-13T12:15:12
 | I have ₹5 lakhs saved and want ₹50 lakhs in 15 years, am I on track? | — | goal_gap_analysis_tool | goal_gap_analysis_tool | ✅ Pass |
 | What's the LTCG tax rate on equity mutual funds? | — | capital_gains_tax_tool | capital_gains_tax_tool | ✅ Pass |
 | What are my Section 80C tax saving options? | — | tax_saving_instruments_tool | tax_saving_instruments_tool | ✅ Pass |
-| What if the market crashes like COVID? How would my portfolio do? | CLIENT_001 | stress_test_tool | stress_test_tool | ✅ Pass |
+| What if the market crashes like COVID? How would my portfolio do? | CLIENT_001 | stress_test_tool |  | ❌ Fail |
 | Show me the technical indicators and volume for TCS | — | swing_analysis_tool | swing_analysis_tool | ✅ Pass |
+| Give me a list of stocks with high volume near their highs, sector wise | — | swing_screener_by_sector_tool | swing_screener_by_sector_tool | ✅ Pass |
+| What should I check before market opens today? | — | premarket_briefing_tool | premarket_briefing_tool | ✅ Pass |
+| Is gold overbought right now? What's the current price? | — | gold_analysis_tool | gold_analysis_tool, market_context_tool | ✅ Pass |
+| What SIP amount do I need monthly to reach 50 lakhs in 10 years? | — | sip_calculator_tool |  | ❌ Fail |
+| What is NAV and how do mutual fund categories work? | — | mutual_fund_education_tool | mutual_fund_education_tool | ✅ Pass |
+| How has scheme code 119551 performed over the past 3 years? | — | mutual_fund_historical_returns_tool | mutual_fund_historical_returns_tool | ✅ Pass |
+| What's the latest investing news today? | — | investing_news_tool | investing_news_tool | ✅ Pass |
