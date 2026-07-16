@@ -160,7 +160,7 @@ st.sidebar.title("📊 Client Selector")
 
 clients_df = load_clients()
 client_options = {
-    f"{row['client_id']} — {row['name']} ({row['risk_profile']})": row["client_id"]
+    f"{'🆕 ' if str(row['client_id']).startswith('CLIENT_U') else ''}{row['client_id']} — {row['name']} ({row['risk_profile']})": row["client_id"]
     for _, row in clients_df.iterrows()
 }
 
@@ -190,6 +190,13 @@ EXAMPLE_QUESTIONS = {
         "What's the difference between a mutual fund and an ETF?",
         "What is a P/E ratio?",
         "What's the difference between stocks and bonds?",
+    ],
+    "Manage Clients (New!)": [
+        "Add a new client named Priya Nair, age 28, goal is wealth growth, moderate risk, ₹50,000 cash",
+        "Add 20 shares of Infosys at ₹1,450 each to CLIENT_U001",
+        "Add a fixed deposit of ₹2,00,000 at 7% interest for CLIENT_U001",
+        "Show me all the clients I've added",
+        "Show me the full details for CLIENT_U001",
     ],
 }
 

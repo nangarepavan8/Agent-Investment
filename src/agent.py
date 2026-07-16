@@ -39,6 +39,7 @@ from src.tools.gold_analysis import get_gold_analysis
 from src.tools.mutual_fund_data import search_mutual_funds, calc_sip_future_value, MUTUAL_FUND_EDUCATION
 from src.tools.mutual_fund_analysis import get_mutual_fund_historical_returns
 from src.tools.investing_news import get_aggregated_investing_news
+from src.tools.client_management import add_client, add_holding, add_other_investment, list_user_added_clients
 from src.memory import store_memory, retrieve_relevant_memory
 from src.audit_log import log_event
 
@@ -434,6 +435,79 @@ def investing_news_tool() -> str:
         return json.dumps({"error": str(e)})
 
 
+@tool
+def add_client_tool(name: str, age: int, investment_goal: str, time_horizon: str,
+                     risk_profile: str = "Moderate", income_bracket: str = "Not specified",
+                     cash_balance: float = 0.0) -> str:
+    """Add a NEW REAL client to the system (e.g. a broker onboarding an
+    actual client) — persists across app restarts. Once added, the
+    client immediately works with EVERY tool (portfolio summary, risk
+    score, rebalancing, goal gap, etc.) exactly like the existing demo
+    clients. Use this when a user (acting as an advisor/broker) asks to
+    add, create, or onboard a new client. investment_goal should be one
+    of: Retirement, Wealth Growth, Child Education, Home Purchase,
+    Regular Income. time_horizon should describe the horizon, e.g.
+    "Short-term (<3 yrs)", "Long-term (>7 yrs)". risk_profile must be
+    Conservative, Moderate, or Aggressive. After creating the client,
+    suggest adding their actual holdings with add_holding_tool and/or
+    add_other_investment_tool."""
+    try:
+        return json.dumps(add_client(name, age, investment_goal, time_horizon,
+                                      risk_profile, income_bracket, cash_balance))
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+@tool
+def add_holding_tool(client_id: str, symbol: str, quantity: float, purchase_price: float,
+                      purchase_date: str = None, sector: str = None) -> str:
+    """Add a REAL stock holding to an existing client (a new client
+    added via add_client_tool, or one of the existing CLIENT_001-010).
+    The stock will be live-priced automatically by every existing
+    portfolio tool. Use this when a user wants to record a client's
+    actual stock purchase. symbol must be a real NSE/BSE ticker (e.g.
+    "TCS.NS"). purchase_date should be an ISO date (YYYY-MM-DD) if
+    known, otherwise omit it to default to today. sector is
+    auto-detected if omitted and the symbol is recognized."""
+    try:
+        return json.dumps(add_holding(client_id, symbol, quantity, purchase_price, purchase_date, sector))
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+@tool
+def add_other_investment_tool(client_id: str, instrument_type: str, principal_amount: float,
+                               annual_interest_rate: float, start_date: str = None,
+                               tenure_years: float = 5) -> str:
+    """Add a REAL non-stock investment (Fixed Deposit, Recurring
+    Deposit, Corporate Bond, PPF, NSC, or Sovereign Gold Bond) to an
+    existing client. Use this when a user wants to record a client's
+    FD/RD/Bond/government-scheme investment. instrument_type must be
+    one of: Fixed Deposit, Recurring Deposit, Corporate Bond, PPF, NSC,
+    Sovereign Gold Bond. annual_interest_rate is a decimal (e.g. 0.07
+    for 7%). start_date should be an ISO date (YYYY-MM-DD) if known,
+    otherwise omit it to default to today."""
+    try:
+        return json.dumps(add_other_investment(client_id, instrument_type, principal_amount,
+                                                 annual_interest_rate, start_date, tenure_years))
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+@tool
+def list_my_clients_tool() -> str:
+    """List every REAL client added via add_client_tool (NOT the
+    original 10 demo clients) with a quick summary — name, age, risk
+    profile, goal, total portfolio value, and holdings count for each.
+    Use this when a user (advisor/broker) asks to see all the clients
+    they've added, wants a roster/list of their real clients, or asks
+    "what clients do I have" / "show me my added clients"."""
+    try:
+        return json.dumps(list_user_added_clients())
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
 ALL_TOOLS = [portfolio_summary_tool, risk_score_tool, rebalancing_tool, market_context_tool,
              profit_booking_tool, sector_performance_tool, investment_guidance_tool,
              historical_performance_tool, stock_screener_tool, growth_illustrator_tool,
@@ -441,7 +515,8 @@ ALL_TOOLS = [portfolio_summary_tool, risk_score_tool, rebalancing_tool, market_c
              stress_test_tool, swing_analysis_tool, swing_screener_by_sector_tool,
              nse_live_volume_tool, premarket_briefing_tool, gold_analysis_tool,
              mutual_fund_search_tool, mutual_fund_historical_returns_tool,
-             sip_calculator_tool, mutual_fund_education_tool, investing_news_tool]
+             sip_calculator_tool, mutual_fund_education_tool, investing_news_tool,
+             add_client_tool, add_holding_tool, add_other_investment_tool, list_my_clients_tool]
 
 TOOLS_BY_NAME = {t.name: t for t in ALL_TOOLS}
 
@@ -538,6 +613,23 @@ Before answering, silently work through:
   current holdings using real historical prices. Use for "what if the
   market crashes" or downside-risk questions. This is backward-looking
   ONLY — never present it as a prediction of a future crash.
+- **add_client_tool** — adds a NEW REAL client (an advisor/broker
+  onboarding an actual person), persisted across restarts. After
+  adding, ALWAYS confirm back the exact details you recorded (name,
+  age, goal, horizon, risk profile, client_id assigned) so the advisor
+  can verify accuracy of this new persistent record — this is
+  important since the record isn't just a suggestion, it's saved data.
+- **add_holding_tool** — adds a REAL stock holding to an existing
+  client (new or one of the original ones). Confirm back the exact
+  symbol, quantity, and price recorded.
+- **add_other_investment_tool** — adds a REAL FD/RD/Bond/PPF/NSC/SGB
+  investment to an existing client. Confirm back the exact details recorded.
+- **list_my_clients_tool** — lists every REAL client added via
+  add_client_tool (not the 10 demo clients) with a quick summary of
+  each. Use when the advisor asks to see their added clients, wants a
+  roster, or asks "what clients do I have" / "show me a specific
+  client's details" (for the latter, this gives the roster overview —
+  use portfolio_summary_tool on that specific client_id for full detail).
 - **No tool** — general finance/investing education (e.g. "what is
   diversification", "how does compound interest work", "ETF vs mutual
   fund", "what is a P/E ratio", "how do FDs/RDs/bonds/gold work as
@@ -548,7 +640,10 @@ Before answering, silently work through:
   tradeoffs) or the relevant tool if it's about a specific real client.
   Not every question needs a tool call.
 
-client_id must always be in the format CLIENT_001 through CLIENT_010.
+client_id is either one of the original demo clients (format
+CLIENT_001 through CLIENT_010) or a real client added via
+add_client_tool (format CLIENT_U001, CLIENT_U002, ...) — both formats
+work identically with every tool.
 Self-service investor questions (investment_guidance_tool, stock_screener_tool,
 growth_illustrator_tool) don't use client_id — they use the individual's
 own age/amount/risk category instead.

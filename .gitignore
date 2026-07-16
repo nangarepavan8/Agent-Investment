@@ -18,6 +18,12 @@ data/audit_log.csv
 # Note: data/eval_report.md is intentionally NOT ignored - commit it as
 # evidence of testing rigor for judges to see.
 
+# REAL user-added client data (via add_client_tool) - never commit real
+# client names/investment details to git, even in a private repo
+data/user_clients.csv
+data/user_holdings.csv
+data/user_other_investments.csv
+
 # OS
 .DS_Store
 

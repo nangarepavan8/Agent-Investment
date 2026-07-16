@@ -22,6 +22,16 @@ def suggest_rebalancing(client_id: str) -> Dict[str, Any]:
     """
     client_info = get_client_info(client_id)
     holdings_df = get_client_holdings(client_id).copy()
+
+    if holdings_df.empty:
+        return {
+            "client_id": client_id,
+            "client_name": client_info["name"],
+            "current_allocation": {},
+            "target_allocation": {},
+            "suggested_actions": ["No stock holdings currently — nothing to rebalance yet."],
+        }
+
     holdings_df["value"] = holdings_df["quantity"] * holdings_df["purchase_price"]
 
     total_value = holdings_df["value"].sum()

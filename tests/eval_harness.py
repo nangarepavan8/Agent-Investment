@@ -64,6 +64,8 @@ EVAL_CASES = [
     (None, "What is NAV and how do mutual fund categories work?", ["mutual_fund_education_tool"]),
     (None, "How has scheme code 119551 performed over the past 3 years?", ["mutual_fund_historical_returns_tool"]),
     (None, "What's the latest investing news today?", ["investing_news_tool"]),
+    (None, "Add a new client named Priya Nair, age 28, goal is wealth growth, moderate risk", ["add_client_tool"]),
+    (None, "Show me all the clients I've added so far", ["list_my_clients_tool"]),
 ]
 
 

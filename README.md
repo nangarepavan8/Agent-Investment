@@ -1473,6 +1473,93 @@ Open "📑 Mutual Funds" → search for a fund → note the new "Real
 Historical Returns" section using the scheme code from search results.
 Open "📰 News" and confirm no import errors appear.
 
+## Stretch Features, Round 31: Add Real Clients & Investments via Chat
+
+**New capability**: an advisor/broker can now add REAL clients and
+their real investment details directly through the chat —
+`src/tools/client_management.py` — persisted to dedicated
+`data/user_clients.csv` / `user_holdings.csv` / `user_other_investments.csv`
+files, kept deliberately separate from the synthetic demo data so
+regenerating the demo dataset (`generate_data.py`) never wipes out a
+real client a broker has added.
+
+**Three new chat tools:**
+- `add_client_tool` — name, age, goal, time horizon, risk profile →
+  creates a new client (auto-assigned ID like `CLIENT_U001`)
+- `add_holding_tool` — adds a real stock holding (live-priced
+  automatically by every existing tool, sector auto-detected)
+- `add_other_investment_tool` — adds a real FD/RD/Bond/PPF/NSC/SGB investment
+
+**Once added, a new client works with EVERY existing tool** —
+Dashboard, Risk Score, Rebalancing, Goal Gap Analysis, Profit Booking,
+Stress Test, everything — with zero changes needed to those tools,
+since `data_loader.py` now transparently merges synthetic + user-added
+data at the source.
+
+**Two real, previously-latent bugs were found and fixed** while
+building this — both would have crashed for any client with zero
+stock holdings (e.g. a newly-added client who only has cash/FD so
+far, before any stocks are added):
+1. `risk_score.py` — `sector_pct.idxmax()` on an empty group would
+   crash; fixed with an explicit zero-holdings branch
+2. `rebalancing.py` — `100 / num_sectors` with `num_sectors = 0` was a
+   guaranteed `ZeroDivisionError`; fixed with an early return
+
+**Verified with a dedicated test** — created a client with ONLY cash
+and a Fixed Deposit (zero stocks), confirmed all three tools
+(portfolio summary, risk score, rebalancing) handle it correctly
+instead of crashing, then re-verified with a normal client (stocks +
+FD) that the math is exactly correct (20 × ₹1,450 + ₹200,000 FD +
+₹50,000 cash = ₹279,000, confirmed exact).
+
+**Privacy note**: `user_*.csv` files are now git-ignored — real client
+names/investment details should never be committed to version control,
+even in a private repo.
+
+Test it:
+```bash
+python -m src.tools.client_management
+streamlit run app.py
+```
+Try the sidebar "💡 Try asking — Manage Clients (New!)" examples, or
+type your own: "Add a new client named [name], age X, goal is Y, Z
+risk." Then check the new client appears in the sidebar selector and
+works across every tab.
+
+## Stretch Features, Round 32: Review Added Clients (Roster + Visual Badge)
+
+Extends Round 31's client-creation feature with a way to actually
+**review** what's been added — the natural next question after "how
+do I add a client" is "how do I see what I've added."
+
+**New `list_my_clients_tool`** (`src/tools/client_management.py`) —
+lists every real client added via `add_client_tool` (excludes the 10
+demo clients), with a quick summary of each: name, age, risk profile,
+goal, total portfolio value, and holdings count. Handles the empty
+state cleanly ("no clients added yet") rather than erroring.
+
+**For full detail on one specific client**, `portfolio_summary_tool`
+already works for any client_id — including user-added ones, with zero
+changes needed, since `data_loader.py` already merges the data
+transparently (built in Round 31).
+
+**Visual touch**: the sidebar client selector now shows a 🆕 badge next
+to user-added clients, so they're distinguishable from the demo
+clients at a glance, not just via chat. Verified the badge logic
+directly — appears only on `CLIENT_U*` entries, confirmed correct.
+
+**New discoverable examples** in the sidebar's "Manage Clients" section:
+"Show me all the clients I've added" and "Show me the full details for
+CLIENT_U001".
+
+Test it:
+```bash
+python -c "from src.tools.client_management import list_user_added_clients; import json; print(json.dumps(list_user_added_clients(), indent=2))"
+streamlit run app.py
+```
+Add a client, then ask "show me all the clients I've added" — check
+it lists correctly. Check the sidebar dropdown shows the 🆕 badge.
+
 ## Roadmap
 
 | Day | Milestone |
@@ -1517,5 +1604,7 @@ Open "📰 News" and confirm no import errors appear.
 | Stretch 28 | Gold tab (real price/indicators/SGB facts, no price target) + simplified stock list ✅ |
 | Stretch 29 | Mutual Funds tab (real AMFI NAV, SIP calculator, education) + News tab (real headlines, AI-organized) ✅ |
 | Stretch 30 | Mutual fund historical returns + fixed duplicate-work regression (News tab) ✅ |
+| Stretch 31 | Add real clients + investments via chat, persisted; fixed 2 zero-holdings crash bugs ✅ |
+| Stretch 32 | Review added clients — roster tool + sidebar 🆕 visual badge ✅ |
 
 🎉 **Build complete.** See `DEMO_SCRIPT.md` for your presentation guide.

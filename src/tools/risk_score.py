@@ -47,35 +47,46 @@ def calc_risk_score(client_id: str) -> Dict[str, Any]:
     total_value = holdings_df["value"].sum()
     factors = []
 
-    # Factor 1: sector concentration — highest single-sector % of portfolio
-    sector_pct = (holdings_df.groupby("sector")["value"].sum() / total_value * 100)
-    max_sector_pct = sector_pct.max()
-    top_sector = sector_pct.idxmax()
-
-    if max_sector_pct >= 50:
-        sector_penalty = 35
-        factors.append(f"High concentration: {top_sector} makes up {max_sector_pct:.0f}% of portfolio")
-    elif max_sector_pct >= 35:
-        sector_penalty = 20
-        factors.append(f"Moderate concentration: {top_sector} makes up {max_sector_pct:.0f}% of portfolio")
+    if holdings_df.empty:
+        # No stock holdings yet (e.g. a newly-added client who only has
+        # cash/FD so far) — there's no sector/position concentration
+        # risk to assess since there are no stocks at all.
+        max_sector_pct = 0.0
+        top_sector = "N/A (no stock holdings)"
+        sector_penalty = 0
+        factors.append("No stock holdings currently — sector concentration not applicable")
+        position_penalty = 0
+        factors.append("No stock holdings currently — single-position risk not applicable")
     else:
-        sector_penalty = 5
-        factors.append(f"Well diversified across sectors (largest: {top_sector} at {max_sector_pct:.0f}%)")
+        # Factor 1: sector concentration — highest single-sector % of portfolio
+        sector_pct = (holdings_df.groupby("sector")["value"].sum() / total_value * 100)
+        max_sector_pct = sector_pct.max()
+        top_sector = sector_pct.idxmax()
 
-    # Factor 2: single-position concentration — highest single-stock % of portfolio
-    position_pct = (holdings_df["value"] / total_value * 100)
-    max_position_pct = position_pct.max()
-    top_symbol = holdings_df.loc[position_pct.idxmax(), "symbol"]
+        if max_sector_pct >= 50:
+            sector_penalty = 35
+            factors.append(f"High concentration: {top_sector} makes up {max_sector_pct:.0f}% of portfolio")
+        elif max_sector_pct >= 35:
+            sector_penalty = 20
+            factors.append(f"Moderate concentration: {top_sector} makes up {max_sector_pct:.0f}% of portfolio")
+        else:
+            sector_penalty = 5
+            factors.append(f"Well diversified across sectors (largest: {top_sector} at {max_sector_pct:.0f}%)")
 
-    if max_position_pct >= 40:
-        position_penalty = 25
-        factors.append(f"Single-stock risk: {top_symbol} makes up {max_position_pct:.0f}% of portfolio")
-    elif max_position_pct >= 25:
-        position_penalty = 15
-        factors.append(f"Some single-stock risk: {top_symbol} makes up {max_position_pct:.0f}% of portfolio")
-    else:
-        position_penalty = 5
-        factors.append(f"No single position dominates (largest: {top_symbol} at {max_position_pct:.0f}%)")
+        # Factor 2: single-position concentration — highest single-stock % of portfolio
+        position_pct = (holdings_df["value"] / total_value * 100)
+        max_position_pct = position_pct.max()
+        top_symbol = holdings_df.loc[position_pct.idxmax(), "symbol"]
+
+        if max_position_pct >= 40:
+            position_penalty = 25
+            factors.append(f"Single-stock risk: {top_symbol} makes up {max_position_pct:.0f}% of portfolio")
+        elif max_position_pct >= 25:
+            position_penalty = 15
+            factors.append(f"Some single-stock risk: {top_symbol} makes up {max_position_pct:.0f}% of portfolio")
+        else:
+            position_penalty = 5
+            factors.append(f"No single position dominates (largest: {top_symbol} at {max_position_pct:.0f}%)")
 
     # Factor 3: stated risk profile bias
     profile_bias = RISK_PROFILE_BIAS.get(client_info["risk_profile"], 10)
